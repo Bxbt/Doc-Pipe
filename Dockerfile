@@ -10,7 +10,9 @@ RUN apk add --no-cache libc6-compat openssl
 # ---- dependencies ----
 FROM base AS deps
 COPY package.json package-lock.json* ./
-RUN npm ci
+# Skip lifecycle scripts here: the `postinstall` (prisma generate) needs the schema,
+# which isn't copied yet. Prisma Client is generated in the builder stage instead.
+RUN npm ci --ignore-scripts
 
 # ---- build ----
 FROM base AS builder
