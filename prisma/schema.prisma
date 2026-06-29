@@ -123,6 +123,17 @@ model Comment {
   author   User     @relation(fields: [authorId], references: [id], onDelete: Cascade)
 }
 
+model Template {
+  id          String   @id @default(cuid())
+  name        String
+  description String   @default("")
+  content     String   @default("")
+  builtin     Boolean  @default(false)
+  sort        Int      @default(0)
+  updatedAt   DateTime @updatedAt
+  createdAt   DateTime @default(now())
+}
+
 model Activity {
   id        String   @id @default(cuid())
   projectId String?

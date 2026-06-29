@@ -1,32 +1,29 @@
-import { TEMPLATES } from "@/lib/templates";
-import { PageHeader, Card } from "@/components/ui";
-import { CopyButton } from "@/components/CopyButton";
+import { getTemplates } from "@/lib/templates-db";
+import { getCurrentUser, canEdit } from "@/lib/auth";
+import { PageHeader } from "@/components/ui";
+import { TemplatesManager } from "@/components/TemplatesManager";
 
-export default function TemplatesPage() {
+export const dynamic = "force-dynamic";
+
+export default async function TemplatesPage() {
+  const [templates, user] = await Promise.all([getTemplates(), getCurrentUser()]);
+
   return (
     <div>
       <PageHeader
         title="Template Library"
-        subtitle="Built-in starting points for every document type. Copy and customize."
+        subtitle="Built-in starting points for every document type. Edit, add, or copy."
       />
-
-      <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
-        {TEMPLATES.map((t) => (
-          <Card key={t.name} className="flex flex-col gap-3">
-            <div>
-              <h3 className="text-sm font-medium">{t.name}</h3>
-              <p className="mt-0.5 text-xs text-muted">{t.description}</p>
-            </div>
-            <pre className="max-h-40 overflow-hidden rounded-lg border border-border bg-surface-2 p-3 text-[11px] leading-relaxed text-muted">
-              {t.content.slice(0, 220)}
-              {t.content.length > 220 ? "…" : ""}
-            </pre>
-            <div className="mt-auto">
-              <CopyButton text={t.content} label="Copy template" />
-            </div>
-          </Card>
-        ))}
-      </div>
+      <TemplatesManager
+        canEdit={canEdit(user)}
+        templates={templates.map((t) => ({
+          id: t.id,
+          name: t.name,
+          description: t.description,
+          content: t.content,
+          builtin: t.builtin,
+        }))}
+      />
     </div>
   );
 }

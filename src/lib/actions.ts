@@ -7,10 +7,14 @@ import { downstreamOf, type Edge } from "./graph";
 import { DOC_TYPES, docLabel, type DocType } from "./constants";
 import { TEMPLATES } from "./templates";
 
-// Starter content for a new document — uses the matching template if one exists.
-function starterContent(type: string): string {
-  const t = TEMPLATES.find((x) => x.name === docLabel(type));
-  return t ? t.content : `# ${docLabel(type)}\n\n_Start writing…_`;
+// Starter content for a new document — prefers the (editable) DB template
+// matching the document type's label, falling back to the built-in template.
+async function starterContentFor(type: string): Promise<string> {
+  const label = docLabel(type);
+  const dbTemplate = await prisma.template.findFirst({ where: { name: label } });
+  if (dbTemplate) return dbTemplate.content;
+  const builtin = TEMPLATES.find((x) => x.name === label);
+  return builtin ? builtin.content : `# ${label}\n\n_Start writing…_`;
 }
 
 // The canonical pipeline used by "Generate standard pipeline".
@@ -209,7 +213,7 @@ export async function addDocument(projectId: string, type: string, title?: strin
       type,
       title: title?.trim() || docLabel(type),
       status: "Draft",
-      content: starterContent(type),
+      content: await starterContentFor(type),
       version: "v1.0",
       updatedById: user.id,
     },
@@ -288,7 +292,7 @@ export async function scaffoldPipeline(projectId: string) {
         type,
         title: docLabel(type),
         status: "Draft",
-        content: starterContent(type),
+        content: await starterContentFor(type),
         version: "v1.0",
         updatedById: user.id,
       },
@@ -315,6 +319,46 @@ export async function scaffoldPipeline(projectId: string) {
     data: { projectId, userId: user.id, action: "scaffolded_pipeline", detail: "Generated standard pipeline" },
   });
   revalidatePath(`/projects/${projectId}`);
+}
+
+export async function createTemplate(input: { name: string; description?: string; content?: string }) {
+  const user = await getCurrentUser();
+  if (!canEdit(user)) throw new Error("You need Editor access to manage templates.");
+  const t = await prisma.template.create({
+    data: {
+      name: input.name.trim() || "Untitled template",
+      description: input.description?.trim() || "",
+      content: input.content ?? "",
+      builtin: false,
+      sort: 999,
+    },
+  });
+  revalidatePath("/templates");
+  return t.id;
+}
+
+export async function updateTemplate(
+  id: string,
+  input: { name?: string; description?: string; content?: string }
+) {
+  const user = await getCurrentUser();
+  if (!canEdit(user)) throw new Error("You need Editor access to edit templates.");
+  await prisma.template.update({
+    where: { id },
+    data: {
+      ...(input.name !== undefined ? { name: input.name } : {}),
+      ...(input.description !== undefined ? { description: input.description } : {}),
+      ...(input.content !== undefined ? { content: input.content } : {}),
+    },
+  });
+  revalidatePath("/templates");
+}
+
+export async function deleteTemplate(id: string) {
+  const user = await getCurrentUser();
+  if (!canEdit(user)) throw new Error("You need Editor access to delete templates.");
+  await prisma.template.delete({ where: { id } });
+  revalidatePath("/templates");
 }
 
 export async function setStatus(projectId: string, documentId: string, status: string) {
