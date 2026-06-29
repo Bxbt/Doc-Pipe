@@ -1,11 +1,17 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { Search } from "lucide-react";
+import { Search, Menu } from "lucide-react";
 import { ThemeToggle } from "./ThemeToggle";
 import { RoleBadge } from "./badges";
 
-export function Topbar({ user }: { user: { name: string; email: string; role: string } }) {
+export function Topbar({
+  user,
+  onMenuClick,
+}: {
+  user: { name: string; email: string; role: string };
+  onMenuClick?: () => void;
+}) {
   const router = useRouter();
 
   function onSearch(e: React.FormEvent<HTMLFormElement>) {
@@ -22,7 +28,14 @@ export function Topbar({ user }: { user: { name: string; email: string; role: st
     .toUpperCase();
 
   return (
-    <header className="sticky top-0 z-10 flex items-center gap-4 border-b border-border bg-bg/80 px-6 py-3 backdrop-blur lg:px-8">
+    <header className="sticky top-0 z-10 flex items-center gap-3 border-b border-border bg-bg/80 px-4 py-3 backdrop-blur sm:px-6 lg:px-8">
+      <button
+        onClick={onMenuClick}
+        title="Open menu"
+        className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-border bg-surface text-muted hover:text-fg md:hidden"
+      >
+        <Menu size={18} />
+      </button>
       <form onSubmit={onSearch} className="relative max-w-md flex-1">
         <Search size={16} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-muted" />
         <input

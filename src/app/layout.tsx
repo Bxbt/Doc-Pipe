@@ -1,11 +1,10 @@
 import type { Metadata } from "next";
 import "./globals.css";
-import { Sidebar } from "@/components/Sidebar";
-import { Topbar } from "@/components/Topbar";
+import { AppShell } from "@/components/AppShell";
 import { getCurrentUser } from "@/lib/auth";
 
 export const metadata: Metadata = {
-  title: "Project Document Pipeline",
+  title: "Doc-Pipe — Document Pipeline",
   description: "Connected project documents with impact analysis and traceability.",
 };
 
@@ -29,13 +28,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
         <script dangerouslySetInnerHTML={{ __html: themeScript }} />
       </head>
       <body className="min-h-screen bg-bg text-fg">
-        <div className="flex min-h-screen">
-          <Sidebar />
-          <div className="flex min-h-screen flex-1 flex-col">
-            <Topbar user={user} />
-            <main className="flex-1 px-6 py-6 lg:px-8">{children}</main>
-          </div>
-        </div>
+        <AppShell user={user}>{children}</AppShell>
       </body>
     </html>
   );
