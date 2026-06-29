@@ -44,6 +44,11 @@ export default async function DocumentPage({
     .filter(Boolean)
     .map((d) => ({ id: d!.id, type: d!.type, status: d!.outdated ? "Outdated" : d!.status }));
 
+  // Other documents in the project, for the dependency pickers.
+  const allDocs = project.documents
+    .filter((d) => d.id !== doc.id)
+    .map((d) => ({ id: d.id, type: d.type, title: d.title }));
+
   return (
     <div className="mx-auto max-w-4xl">
       <Link
@@ -68,6 +73,7 @@ export default async function DocumentPage({
         }}
         upstream={upstream}
         downstream={downstream}
+        allDocs={allDocs}
         perms={{ canEdit: canEdit(user), canReview: canReview(user) }}
       />
     </div>

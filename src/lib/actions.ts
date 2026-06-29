@@ -2,8 +2,38 @@
 
 import { revalidatePath } from "next/cache";
 import { prisma } from "./db";
-import { getCurrentUser, canEdit, canReview } from "./auth";
+import { getCurrentUser, canEdit, canReview, canAdmin } from "./auth";
 import { downstreamOf, type Edge } from "./graph";
+import { DOC_TYPES, docLabel, type DocType } from "./constants";
+import { TEMPLATES } from "./templates";
+
+// Starter content for a new document — uses the matching template if one exists.
+function starterContent(type: string): string {
+  const t = TEMPLATES.find((x) => x.name === docLabel(type));
+  return t ? t.content : `# ${docLabel(type)}\n\n_Start writing…_`;
+}
+
+// The canonical pipeline used by "Generate standard pipeline".
+// target depends on source (source --> target).
+const STANDARD_EDGES: [DocType, DocType][] = [
+  ["BUSINESS_REQUIREMENT", "FUNCTIONAL_REQUIREMENT"],
+  ["BUSINESS_REQUIREMENT", "SRS"],
+  ["BUSINESS_REQUIREMENT", "UAT"],
+  ["FUNCTIONAL_REQUIREMENT", "SRS"],
+  ["FUNCTIONAL_REQUIREMENT", "USER_STORY"],
+  ["SRS", "FLOW_DIAGRAM"],
+  ["SRS", "USER_STORY"],
+  ["SRS", "DATABASE_DESIGN"],
+  ["SRS", "API_SPEC"],
+  ["FLOW_DIAGRAM", "USER_STORY"],
+  ["USER_STORY", "API_SPEC"],
+  ["USER_STORY", "TEST_CASE"],
+  ["DATABASE_DESIGN", "API_SPEC"],
+  ["API_SPEC", "TEST_CASE"],
+  ["TEST_CASE", "UAT"],
+  ["UAT", "DEPLOYMENT_CHECKLIST"],
+  ["DEPLOYMENT_CHECKLIST", "RELEASE_NOTE"],
+];
 
 function bumpMinor(version: string): string {
   const m = version.match(/^v?(\d+)\.(\d+)$/);
@@ -132,6 +162,159 @@ export async function setUserRole(userId: string, role: string) {
   if (user.role !== "Admin") throw new Error("Only Admins can change roles.");
   await prisma.user.update({ where: { id: userId }, data: { role } });
   revalidatePath("/team");
+}
+
+export async function updateProject(
+  projectId: string,
+  input: { name?: string; customer?: string; businessType?: string; description?: string; status?: string }
+) {
+  const user = await getCurrentUser();
+  if (!canEdit(user)) throw new Error("You need Editor access to edit a project.");
+
+  await prisma.project.update({
+    where: { id: projectId },
+    data: {
+      ...(input.name !== undefined ? { name: input.name } : {}),
+      ...(input.customer !== undefined ? { customer: input.customer || null } : {}),
+      ...(input.businessType !== undefined ? { businessType: input.businessType } : {}),
+      ...(input.description !== undefined ? { description: input.description || null } : {}),
+      ...(input.status !== undefined ? { status: input.status } : {}),
+    },
+  });
+  await prisma.activity.create({
+    data: { projectId, userId: user.id, action: "updated_project", detail: input.name ?? "settings" },
+  });
+
+  revalidatePath(`/projects/${projectId}`);
+  revalidatePath("/projects");
+  revalidatePath("/");
+}
+
+export async function deleteProject(projectId: string) {
+  const user = await getCurrentUser();
+  if (!canAdmin(user)) throw new Error("Only Admins can delete a project.");
+  // Cascades to documents, dependencies, members, activities via the schema.
+  await prisma.project.delete({ where: { id: projectId } });
+  revalidatePath("/projects");
+  revalidatePath("/");
+}
+
+export async function addDocument(projectId: string, type: string, title?: string) {
+  const user = await getCurrentUser();
+  if (!canEdit(user)) throw new Error("You need Editor access to add documents.");
+
+  const doc = await prisma.document.create({
+    data: {
+      projectId,
+      type,
+      title: title?.trim() || docLabel(type),
+      status: "Draft",
+      content: starterContent(type),
+      version: "v1.0",
+      updatedById: user.id,
+    },
+  });
+  await prisma.documentVersion.create({
+    data: { documentId: doc.id, version: "v1.0", content: doc.content, note: "Created", authorId: user.id },
+  });
+  await prisma.activity.create({
+    data: { projectId, userId: user.id, action: "added_document", detail: doc.title },
+  });
+
+  revalidatePath(`/projects/${projectId}`);
+  return doc.id;
+}
+
+export async function deleteDocument(projectId: string, documentId: string) {
+  const user = await getCurrentUser();
+  if (!canEdit(user)) throw new Error("You need Editor access to delete documents.");
+  const doc = await prisma.document.findUnique({ where: { id: documentId } });
+  // Dependency edges referencing this document cascade-delete via the schema.
+  await prisma.document.delete({ where: { id: documentId } });
+  await prisma.activity.create({
+    data: { projectId, userId: user.id, action: "deleted_document", detail: doc?.title ?? documentId },
+  });
+  revalidatePath(`/projects/${projectId}`);
+}
+
+export async function addDependency(projectId: string, sourceId: string, targetId: string) {
+  const user = await getCurrentUser();
+  if (!canEdit(user)) throw new Error("You need Editor access to link documents.");
+  if (sourceId === targetId) throw new Error("A document cannot depend on itself.");
+
+  const edges = await loadEdges(projectId);
+  // Reject if this would create a cycle: source must not already be downstream of target.
+  if (downstreamOf(targetId, edges).has(sourceId)) {
+    throw new Error("That link would create a circular dependency.");
+  }
+
+  await prisma.documentDependency.upsert({
+    where: { sourceId_targetId: { sourceId, targetId } },
+    create: { projectId, sourceId, targetId },
+    update: {},
+  });
+  await prisma.activity.create({
+    data: { projectId, userId: user.id, action: "linked_documents", detail: `${sourceId} → ${targetId}` },
+  });
+  revalidatePath(`/projects/${projectId}`);
+  revalidatePath(`/projects/${projectId}/documents/${targetId}`);
+}
+
+export async function removeDependency(projectId: string, sourceId: string, targetId: string) {
+  const user = await getCurrentUser();
+  if (!canEdit(user)) throw new Error("You need Editor access to unlink documents.");
+  await prisma.documentDependency
+    .delete({ where: { sourceId_targetId: { sourceId, targetId } } })
+    .catch(() => {});
+  revalidatePath(`/projects/${projectId}`);
+  revalidatePath(`/projects/${projectId}/documents/${targetId}`);
+}
+
+// One-click: create any missing standard documents and wire the standard pipeline.
+export async function scaffoldPipeline(projectId: string) {
+  const user = await getCurrentUser();
+  if (!canEdit(user)) throw new Error("You need Editor access.");
+
+  const existing = await prisma.document.findMany({ where: { projectId } });
+  const idByType: Record<string, string> = {};
+  for (const d of existing) idByType[d.type] = d.id;
+
+  // Create missing standard document types.
+  for (const { type } of DOC_TYPES) {
+    if (idByType[type]) continue;
+    const doc = await prisma.document.create({
+      data: {
+        projectId,
+        type,
+        title: docLabel(type),
+        status: "Draft",
+        content: starterContent(type),
+        version: "v1.0",
+        updatedById: user.id,
+      },
+    });
+    idByType[type] = doc.id;
+    await prisma.documentVersion.create({
+      data: { documentId: doc.id, version: "v1.0", content: doc.content, note: "Scaffolded", authorId: user.id },
+    });
+  }
+
+  // Wire standard dependencies (skip any that already exist).
+  for (const [from, to] of STANDARD_EDGES) {
+    const sourceId = idByType[from];
+    const targetId = idByType[to];
+    if (!sourceId || !targetId) continue;
+    await prisma.documentDependency.upsert({
+      where: { sourceId_targetId: { sourceId, targetId } },
+      create: { projectId, sourceId, targetId },
+      update: {},
+    });
+  }
+
+  await prisma.activity.create({
+    data: { projectId, userId: user.id, action: "scaffolded_pipeline", detail: "Generated standard pipeline" },
+  });
+  revalidatePath(`/projects/${projectId}`);
 }
 
 export async function setStatus(projectId: string, documentId: string, status: string) {

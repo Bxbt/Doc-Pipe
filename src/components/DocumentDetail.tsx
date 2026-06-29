@@ -20,9 +20,18 @@ import { Markdown } from "./Markdown";
 import { StatusBadge } from "./badges";
 import { docLabel, docShort } from "@/lib/constants";
 import { cn } from "@/lib/utils";
-import { markChanged, resolveOutdated, saveDocument, setStatus } from "@/lib/actions";
+import {
+  markChanged,
+  resolveOutdated,
+  saveDocument,
+  setStatus,
+  addDependency,
+  removeDependency,
+} from "@/lib/actions";
+import { Plus } from "lucide-react";
 
 type RelDoc = { id: string; type: string; status: string };
+type PickDoc = { id: string; type: string; title: string };
 
 type Doc = {
   id: string;
@@ -41,12 +50,14 @@ export function DocumentDetail({
   doc,
   upstream,
   downstream,
+  allDocs,
   perms,
 }: {
   projectId: string;
   doc: Doc;
   upstream: RelDoc[];
   downstream: RelDoc[];
+  allDocs: PickDoc[];
   perms: { canEdit: boolean; canReview: boolean };
 }) {
   const router = useRouter();
@@ -213,14 +224,22 @@ export function DocumentDetail({
             title="Depends on"
             icon={<ArrowUpRight size={13} />}
             projectId={projectId}
+            docId={doc.id}
+            direction="upstream"
             docs={upstream}
+            allDocs={allDocs}
+            canEdit={perms.canEdit}
             empty="No upstream documents"
           />
           <RelatedPanel
             title="Impacts"
             icon={<ArrowDownRight size={13} />}
             projectId={projectId}
+            docId={doc.id}
+            direction="downstream"
             docs={downstream}
+            allDocs={allDocs}
+            canEdit={perms.canEdit}
             empty="No downstream documents"
           />
         </div>
@@ -233,36 +252,127 @@ function RelatedPanel({
   title,
   icon,
   projectId,
+  docId,
+  direction,
   docs,
+  allDocs,
+  canEdit,
   empty,
 }: {
   title: string;
   icon: React.ReactNode;
   projectId: string;
+  docId: string;
+  direction: "upstream" | "downstream";
   docs: RelDoc[];
+  allDocs: PickDoc[];
+  canEdit: boolean;
   empty: string;
 }) {
+  const router = useRouter();
+  const [isPending, startTransition] = useTransition();
+  const [adding, setAdding] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+
+  // Documents available to link (exclude ones already linked here).
+  const linkedIds = new Set(docs.map((d) => d.id));
+  const options = allDocs.filter((d) => !linkedIds.has(d.id));
+
+  function link(otherId: string) {
+    // upstream: the other doc is the source (this depends on it)
+    // downstream: this doc is the source (it impacts the other)
+    const sourceId = direction === "upstream" ? otherId : docId;
+    const targetId = direction === "upstream" ? docId : otherId;
+    setErr(null);
+    startTransition(async () => {
+      try {
+        await addDependency(projectId, sourceId, targetId);
+        setAdding(false);
+        router.refresh();
+      } catch (e) {
+        setErr(e instanceof Error ? e.message : "Failed to link");
+      }
+    });
+  }
+
+  function unlink(otherId: string) {
+    const sourceId = direction === "upstream" ? otherId : docId;
+    const targetId = direction === "upstream" ? docId : otherId;
+    startTransition(async () => {
+      await removeDependency(projectId, sourceId, targetId);
+      router.refresh();
+    });
+  }
+
   return (
     <div className="rounded-xl border border-border bg-surface p-4">
-      <div className="mb-2 flex items-center gap-1.5 text-xs font-semibold text-muted">
-        {icon} {title}
+      <div className="mb-2 flex items-center justify-between">
+        <div className="flex items-center gap-1.5 text-xs font-semibold text-muted">
+          {icon} {title}
+        </div>
+        {canEdit && options.length > 0 && (
+          <button
+            onClick={() => setAdding((v) => !v)}
+            className="flex h-6 w-6 items-center justify-center rounded-md border border-border text-muted hover:text-brand"
+            title="Add link"
+          >
+            <Plus size={13} />
+          </button>
+        )}
       </div>
+
+      {adding && (
+        <select
+          autoFocus
+          defaultValue=""
+          disabled={isPending}
+          onChange={(e) => e.target.value && link(e.target.value)}
+          className="mb-2 w-full rounded-lg border border-border bg-bg px-2 py-1.5 text-xs outline-none focus:border-brand"
+        >
+          <option value="" disabled>
+            Select a document…
+          </option>
+          {options.map((d) => (
+            <option key={d.id} value={d.id}>
+              {docLabel(d.type)} — {d.title}
+            </option>
+          ))}
+        </select>
+      )}
+      {err && <p className="mb-2 text-[11px] text-red-400">{err}</p>}
+
       {docs.length === 0 ? (
         <p className="text-[11px] text-muted">{empty}</p>
       ) : (
         <div className="flex flex-col gap-1.5">
           {docs.map((d) => (
-            <Link
+            <div
               key={d.id}
-              href={`/projects/${projectId}/documents/${d.id}`}
               className={cn(
-                "flex items-center justify-between gap-2 rounded-lg border px-2.5 py-1.5 text-xs hover:border-brand/50",
+                "group flex items-center justify-between gap-2 rounded-lg border px-2.5 py-1.5 text-xs",
                 d.status === "Outdated" ? "border-red-500/40" : "border-border"
               )}
             >
-              <span className="truncate">{docLabel(d.type)}</span>
-              <StatusBadge status={d.status} className="shrink-0" />
-            </Link>
+              <Link
+                href={`/projects/${projectId}/documents/${d.id}`}
+                className="truncate hover:text-brand"
+              >
+                {docLabel(d.type)}
+              </Link>
+              <div className="flex shrink-0 items-center gap-1.5">
+                <StatusBadge status={d.status} />
+                {canEdit && (
+                  <button
+                    onClick={() => unlink(d.id)}
+                    disabled={isPending}
+                    title="Remove link"
+                    className="text-muted opacity-0 transition-opacity hover:text-red-400 group-hover:opacity-100"
+                  >
+                    <X size={13} />
+                  </button>
+                )}
+              </div>
+            </div>
           ))}
         </div>
       )}

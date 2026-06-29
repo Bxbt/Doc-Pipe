@@ -6,6 +6,7 @@ import { downstreamOf } from "@/lib/graph";
 import { ProjectWorkspace } from "@/components/ProjectWorkspace";
 import { StatusBadge } from "@/components/badges";
 import { formatDate } from "@/lib/utils";
+import { getCurrentUser, canEdit, canAdmin } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
 
@@ -19,10 +20,11 @@ const TRACE_COLUMNS: { type: string; label: string }[] = [
 ];
 
 export default async function ProjectPage({ params }: { params: { id: string } }) {
-  const data = await getProjectFull(params.id);
+  const [data, user] = await Promise.all([getProjectFull(params.id), getCurrentUser()]);
   if (!data) notFound();
   const { project, edges } = data;
   const docs = project.documents;
+  const perms = { canEdit: canEdit(user), canAdmin: canAdmin(user) };
 
   const health = computeHealth(docs);
   const completion = overallCompletion(docs);
@@ -107,6 +109,14 @@ export default async function ProjectPage({ params }: { params: { id: string } }
 
       <ProjectWorkspace
         projectId={project.id}
+        project={{
+          name: project.name,
+          customer: project.customer,
+          businessType: project.businessType,
+          description: project.description,
+          status: project.status,
+        }}
+        perms={perms}
         documents={documentsLite}
         nodes={nodes}
         edges={edges}
