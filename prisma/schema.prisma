@@ -1,0 +1,137 @@
+// Project Document Pipeline — data model
+// SQLite has no native enums, so enum-like fields are stored as strings
+// and validated in application code (see src/lib/constants.ts).
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  name      String
+  // Role: Admin | Editor | Reviewer | Viewer
+  role      String   @default("Viewer")
+  createdAt DateTime @default(now())
+
+  documentsEdited Document[]      @relation("DocumentUpdatedBy")
+  memberships     ProjectMember[]
+  comments        Comment[]
+  activities      Activity[]
+  versions        DocumentVersion[]
+}
+
+model Project {
+  id          String   @id @default(cuid())
+  name        String
+  customer    String?
+  // Drives the Smart Checklist of recommended documents.
+  businessType String  @default("Generic")
+  status      String   @default("Active") // Active | OnHold | Done | Archived
+  description String?
+  startDate   DateTime?
+  endDate     DateTime?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  documents    Document[]
+  dependencies DocumentDependency[]
+  members      ProjectMember[]
+  activities   Activity[]
+}
+
+model ProjectMember {
+  id        String  @id @default(cuid())
+  projectId String
+  userId    String
+  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  user      User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([projectId, userId])
+}
+
+model Document {
+  id        String   @id @default(cuid())
+  projectId String
+  // One of the DOC_TYPES (see constants.ts): BUSINESS_REQUIREMENT, SRS, ...
+  type      String
+  title     String
+  // Draft | InReview | Approved | Outdated
+  status    String   @default("Draft")
+  content   String   @default("")
+  version   String   @default("v1.0")
+  // Set true when an upstream document changed after this one was last touched.
+  outdated  Boolean  @default(false)
+
+  updatedById String?
+  updatedBy   User?   @relation("DocumentUpdatedBy", fields: [updatedById], references: [id])
+  updatedAt   DateTime @updatedAt
+  createdAt   DateTime @default(now())
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  // Edges where this document is the upstream source (it affects others).
+  outgoing DocumentDependency[] @relation("SourceDoc")
+  // Edges where this document depends on an upstream source.
+  incoming DocumentDependency[] @relation("TargetDoc")
+
+  comments Comment[]
+  versions DocumentVersion[]
+}
+
+// Directed edge: `target` depends on `source`.
+// When `source` changes, `target` becomes outdated.
+model DocumentDependency {
+  id        String @id @default(cuid())
+  projectId String
+  sourceId  String
+  targetId  String
+
+  project Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  source  Document @relation("SourceDoc", fields: [sourceId], references: [id], onDelete: Cascade)
+  target  Document @relation("TargetDoc", fields: [targetId], references: [id], onDelete: Cascade)
+
+  @@unique([sourceId, targetId])
+}
+
+model DocumentVersion {
+  id         String   @id @default(cuid())
+  documentId String
+  version    String
+  content    String
+  note       String?
+  createdAt  DateTime @default(now())
+  authorId   String?
+
+  document Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  author   User?    @relation(fields: [authorId], references: [id])
+}
+
+model Comment {
+  id         String   @id @default(cuid())
+  documentId String
+  authorId   String
+  body       String
+  createdAt  DateTime @default(now())
+
+  document Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  author   User     @relation(fields: [authorId], references: [id], onDelete: Cascade)
+}
+
+model Activity {
+  id        String   @id @default(cuid())
+  projectId String?
+  userId    String?
+  // Free-form action label, e.g. "marked_changed", "edited", "approved"
+  action    String
+  detail    String?
+  createdAt DateTime @default(now())
+
+  project Project? @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  user    User?    @relation(fields: [userId], references: [id])
+}

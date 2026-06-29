@@ -1,0 +1,102 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --font-sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+
+  /* Light theme */
+  --bg: 248 249 251;
+  --surface: 255 255 255;
+  --surface-2: 244 245 247;
+  --border: 226 228 233;
+  --fg: 24 26 31;
+  --muted: 110 116 128;
+  --brand: 99 102 241;
+  --brand-fg: 255 255 255;
+}
+
+.dark {
+  --bg: 10 11 14;
+  --surface: 19 21 27;
+  --surface-2: 27 30 38;
+  --border: 39 43 53;
+  --fg: 233 236 242;
+  --muted: 143 150 163;
+  --brand: 129 140 248;
+  --brand-fg: 13 15 20;
+}
+
+* {
+  border-color: rgb(var(--border));
+}
+
+html,
+body {
+  background: rgb(var(--bg));
+  color: rgb(var(--fg));
+}
+
+body {
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+}
+
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+::-webkit-scrollbar-thumb {
+  background: rgb(var(--border));
+  border-radius: 999px;
+}
+
+/* Markdown rendering */
+.prose-doc {
+  color: rgb(var(--fg));
+  line-height: 1.7;
+  font-size: 0.95rem;
+}
+.prose-doc h1 { font-size: 1.5rem; font-weight: 700; margin: 0.2rem 0 1rem; }
+.prose-doc h2 { font-size: 1.2rem; font-weight: 600; margin: 1.5rem 0 0.75rem; }
+.prose-doc h3 { font-size: 1.05rem; font-weight: 600; margin: 1.2rem 0 0.5rem; }
+.prose-doc p { margin: 0.75rem 0; }
+.prose-doc ul { list-style: disc; padding-left: 1.4rem; margin: 0.75rem 0; }
+.prose-doc ol { list-style: decimal; padding-left: 1.4rem; margin: 0.75rem 0; }
+.prose-doc li { margin: 0.3rem 0; }
+.prose-doc a { color: rgb(var(--brand)); text-decoration: underline; }
+.prose-doc code {
+  background: rgb(var(--surface-2));
+  padding: 0.1rem 0.35rem;
+  border-radius: 6px;
+  font-size: 0.85em;
+  font-family: ui-monospace, monospace;
+}
+.prose-doc pre {
+  background: rgb(var(--surface-2));
+  border: 1px solid rgb(var(--border));
+  padding: 1rem;
+  border-radius: 10px;
+  overflow-x: auto;
+  margin: 1rem 0;
+}
+.prose-doc pre code { background: none; padding: 0; }
+.prose-doc table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 1rem 0;
+  font-size: 0.88rem;
+}
+.prose-doc th, .prose-doc td {
+  border: 1px solid rgb(var(--border));
+  padding: 0.5rem 0.7rem;
+  text-align: left;
+}
+.prose-doc th { background: rgb(var(--surface-2)); font-weight: 600; }
+.prose-doc input[type="checkbox"] { margin-right: 0.5rem; }
+.prose-doc blockquote {
+  border-left: 3px solid rgb(var(--brand));
+  padding-left: 1rem;
+  color: rgb(var(--muted));
+  margin: 1rem 0;
+}
