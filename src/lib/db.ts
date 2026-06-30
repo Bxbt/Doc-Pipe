@@ -18,7 +18,9 @@ if (process.env.NODE_ENV !== "production") globalForPrisma.prisma = prisma;
 //  - busy_timeout makes a writer wait briefly for a lock instead of erroring
 //    with SQLITE_BUSY.
 // Run once per fresh client; fire-and-forget is fine (WAL persists in the file).
+// These PRAGMAs return a row, so they must use $queryRawUnsafe — $executeRawUnsafe
+// rejects result-returning statements on SQLite.
 if (isNewClient) {
-  prisma.$executeRawUnsafe("PRAGMA journal_mode=WAL;").catch(() => {});
-  prisma.$executeRawUnsafe("PRAGMA busy_timeout=5000;").catch(() => {});
+  prisma.$queryRawUnsafe("PRAGMA journal_mode=WAL;").catch(() => {});
+  prisma.$queryRawUnsafe("PRAGMA busy_timeout=5000;").catch(() => {});
 }
