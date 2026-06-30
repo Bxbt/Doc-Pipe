@@ -8,6 +8,7 @@ import { docLabel } from "./constants";
 import { TEMPLATES } from "./templates";
 import { getBusinessTypePipeline } from "./business-types";
 import { unlink } from "node:fs/promises";
+import { LOCK_TTL_MS } from "./constants";
 import { storedPath } from "./storage";
 
 // Starter content for a new document — prefers the (editable) DB template
@@ -101,7 +102,15 @@ export async function saveDocument(projectId: string, documentId: string, conten
   const newVersion = bumpMinor(doc.version);
   await prisma.document.update({
     where: { id: documentId },
-    data: { content, version: newVersion, updatedById: user.id },
+    // Saving also releases this user's edit lock.
+    data: {
+      content,
+      version: newVersion,
+      updatedById: user.id,
+      editingById: null,
+      editingByName: null,
+      editingAt: null,
+    },
   });
   await prisma.documentVersion.create({
     data: { documentId, version: newVersion, content, note: "Edited", authorId: user.id },
@@ -112,6 +121,74 @@ export async function saveDocument(projectId: string, documentId: string, conten
 
   revalidatePath(`/projects/${projectId}/documents/${documentId}`);
   revalidatePath(`/projects/${projectId}`);
+}
+
+// ── Pessimistic edit lock ─────────────────────────────────────────────────
+// A document may be edited by one person at a time. The lock is refreshed by a
+// client heartbeat; a lock with no heartbeat for LOCK_TTL_MS is considered
+// stale and can be taken over, so a crashed/closed tab never deadlocks a doc.
+function staleBefore() {
+  return new Date(Date.now() - LOCK_TTL_MS);
+}
+
+// Try to acquire (or renew) the lock. Atomic: the conditional updateMany only
+// succeeds if the doc is unlocked, already mine, or the existing lock is stale.
+export async function acquireEditLock(documentId: string) {
+  const user = await getCurrentUser();
+  if (!canEdit(user)) throw new Error("You need Editor access to edit documents.");
+
+  const res = await prisma.document.updateMany({
+    where: {
+      id: documentId,
+      OR: [
+        { editingById: null },
+        { editingById: user.id },
+        { editingAt: { lt: staleBefore() } },
+      ],
+    },
+    data: { editingById: user.id, editingByName: user.name, editingAt: new Date() },
+  });
+
+  if (res.count > 0) return { ok: true as const };
+
+  const doc = await prisma.document.findUnique({
+    where: { id: documentId },
+    select: { editingByName: true },
+  });
+  return { ok: false as const, lockedBy: doc?.editingByName ?? "another user" };
+}
+
+// Renew the lock while editing. Returns ok:false if the lock was lost (e.g. it
+// went stale and someone else took over) so the client can react.
+export async function heartbeatEditLock(documentId: string) {
+  const user = await getCurrentUser();
+  if (!user) return { ok: false as const };
+  const res = await prisma.document.updateMany({
+    where: { id: documentId, editingById: user.id },
+    data: { editingAt: new Date() },
+  });
+  return { ok: res.count > 0 };
+}
+
+// Release the lock (Save/Cancel/leave). Only clears it if the caller holds it.
+export async function releaseEditLock(documentId: string) {
+  const user = await getCurrentUser();
+  if (!user) return;
+  await prisma.document.updateMany({
+    where: { id: documentId, editingById: user.id },
+    data: { editingById: null, editingByName: null, editingAt: null },
+  });
+}
+
+// Admin escape hatch: force-clear a lock held by someone else.
+export async function forceReleaseEditLock(projectId: string, documentId: string) {
+  const user = await getCurrentUser();
+  if (!canAdmin(user)) throw new Error("Admin access required to override a lock.");
+  await prisma.document.updateMany({
+    where: { id: documentId },
+    data: { editingById: null, editingByName: null, editingAt: null },
+  });
+  revalidatePath(`/projects/${projectId}/documents/${documentId}`);
 }
 
 // Parse a "YYYY-MM-DD" string into a Date, or null when empty/invalid.

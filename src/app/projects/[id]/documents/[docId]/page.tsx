@@ -2,10 +2,10 @@ import { notFound } from "next/navigation";
 import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
 import { prisma } from "@/lib/db";
-import { getCurrentUser, canEdit, canReview } from "@/lib/auth";
+import { getCurrentUser, canEdit, canReview, canAdmin } from "@/lib/auth";
 import { directDependencies, directDependents } from "@/lib/graph";
 import { DocumentDetail } from "@/components/DocumentDetail";
-import { docLabel } from "@/lib/constants";
+import { docLabel, LOCK_TTL_MS } from "@/lib/constants";
 
 export const dynamic = "force-dynamic";
 
@@ -33,6 +33,16 @@ export default async function DocumentPage({
   ]);
 
   if (!doc || !project || doc.projectId !== project.id) notFound();
+
+  // Edit-lock state for the initial render (the lock itself is enforced
+  // server-side in acquireEditLock; this is just the hint shown on load).
+  const lockActive =
+    !!doc.editingById && !!doc.editingAt && doc.editingAt.getTime() > Date.now() - LOCK_TTL_MS;
+  const lock = {
+    active: lockActive,
+    byName: lockActive ? doc.editingByName : null,
+    mine: lockActive && doc.editingById === user.id,
+  };
 
   const edges = project.dependencies.map((d) => ({ sourceId: d.sourceId, targetId: d.targetId }));
   const byId = new Map(project.documents.map((d) => [d.id, d]));
@@ -83,7 +93,8 @@ export default async function DocumentPage({
           mime: a.mime,
           size: a.size,
         }))}
-        perms={{ canEdit: canEdit(user), canReview: canReview(user) }}
+        lock={lock}
+        perms={{ canEdit: canEdit(user), canReview: canReview(user), canAdmin: canAdmin(user) }}
       />
     </div>
   );

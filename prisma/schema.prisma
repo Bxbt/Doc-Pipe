@@ -74,6 +74,13 @@ model Document {
   gx        Int?
   gy        Int?
 
+  // Pessimistic edit lock: who currently has the editor open. `editingAt` is
+  // refreshed by a heartbeat; a lock older than the TTL is treated as stale and
+  // can be taken over (see acquireEditLock in src/lib/actions.ts).
+  editingById   String?
+  editingByName String?
+  editingAt     DateTime?
+
   updatedById String?
   updatedBy   User?   @relation("DocumentUpdatedBy", fields: [updatedById], references: [id])
   updatedAt   DateTime @updatedAt
@@ -89,6 +96,8 @@ model Document {
   comments Comment[]
   versions DocumentVersion[]
   attachments Attachment[]
+
+  @@index([projectId])
 }
 
 // Files attached to a document. Binary lives on disk (see src/lib/storage.ts);
@@ -105,6 +114,8 @@ model Attachment {
 
   document   Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
   uploadedBy User?    @relation(fields: [uploadedById], references: [id])
+
+  @@index([documentId])
 }
 
 // Directed edge: `target` depends on `source`.
@@ -120,6 +131,10 @@ model DocumentDependency {
   target  Document @relation("TargetDoc", fields: [targetId], references: [id], onDelete: Cascade)
 
   @@unique([sourceId, targetId])
+  // sourceId is already covered by the unique index prefix; index targetId for
+  // upstream lookups and projectId for per-project graph loads.
+  @@index([targetId])
+  @@index([projectId])
 }
 
 model DocumentVersion {
@@ -133,6 +148,8 @@ model DocumentVersion {
 
   document Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
   author   User?    @relation(fields: [authorId], references: [id])
+
+  @@index([documentId])
 }
 
 model Comment {
@@ -144,6 +161,8 @@ model Comment {
 
   document Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
   author   User     @relation(fields: [authorId], references: [id], onDelete: Cascade)
+
+  @@index([documentId])
 }
 
 model Template {
@@ -181,4 +200,7 @@ model Activity {
   // Keep the audit trail even after a project is deleted (projectId becomes null).
   project Project? @relation(fields: [projectId], references: [id], onDelete: SetNull)
   user    User?    @relation(fields: [userId], references: [id])
+
+  @@index([projectId])
+  @@index([createdAt])
 }

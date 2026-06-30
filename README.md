@@ -27,6 +27,7 @@ go out of date. No more drifting docs.
 | **Document Editor** | **Notion-style block editor** (BlockNote) over Markdown — headings, tables, checklists, **Mermaid diagrams**, code blocks; versioning, copy, export `.md` |
 | **Attachments** | Upload images / PDF / Word / Excel / CSV / zip (≤10 MB); inline preview for images & PDF. Browse, paste, or drag images straight into a document |
 | **Templates** | Editable template library (create / edit / delete); new documents draw starter content from it |
+| **Edit lock** | One person edits a document at a time; others see a "being edited" modal and can't enter. Stale locks (no heartbeat for 90s) auto-release so a closed tab never deadlocks; admins can force-unlock |
 | **Roles** | Admin · Editor · Reviewer · Viewer (authorization enforced server-side) |
 | **Project meta** | Customer, business type, status, start/end dates |
 | **Search** | Global search across projects and documents |
@@ -36,7 +37,8 @@ go out of date. No more drifting docs.
 
 - **Next.js 14** (App Router, Server Actions + Route Handlers) + **React 18** + **TypeScript**
 - **Tailwind CSS** (dark mode by default)
-- **Prisma** ORM + **SQLite** (single file, zero external DB to run)
+- **Prisma** ORM + **SQLite** in **WAL mode** with indexed foreign keys — comfortably
+  handles ~10–50 concurrent users (single file, zero external DB to run)
 - **BlockNote** block editor (loads/saves Markdown, so content stays plain text)
 - **Mermaid** for diagrams (lazy-loaded client-side)
 - **Docker** + **Cloudflare Tunnel** + **Cloudflare Access** for production

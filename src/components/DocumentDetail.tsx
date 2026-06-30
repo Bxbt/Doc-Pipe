@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useState, useTransition, useEffect } from "react";
 import dynamic from "next/dynamic";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -16,11 +16,12 @@ import {
   AlertTriangle,
   ArrowUpRight,
   ArrowDownRight,
+  Lock,
 } from "lucide-react";
 import { Markdown } from "./Markdown";
 import { AttachmentPanel } from "./AttachmentPanel";
 import { StatusBadge } from "./badges";
-import { docLabel, docShort } from "@/lib/constants";
+import { docLabel, docShort, LOCK_HEARTBEAT_MS } from "@/lib/constants";
 import { cn } from "@/lib/utils";
 import {
   markChanged,
@@ -29,6 +30,10 @@ import {
   setStatus,
   addDependency,
   removeDependency,
+  acquireEditLock,
+  heartbeatEditLock,
+  releaseEditLock,
+  forceReleaseEditLock,
 } from "@/lib/actions";
 import { Plus } from "lucide-react";
 
@@ -60,6 +65,7 @@ export function DocumentDetail({
   downstream,
   allDocs,
   attachments,
+  lock,
   perms,
 }: {
   projectId: string;
@@ -68,13 +74,19 @@ export function DocumentDetail({
   downstream: RelDoc[];
   allDocs: PickDoc[];
   attachments: { id: string; filename: string; mime: string; size: number }[];
-  perms: { canEdit: boolean; canReview: boolean };
+  lock: { active: boolean; byName: string | null; mine: boolean };
+  perms: { canEdit: boolean; canReview: boolean; canAdmin: boolean };
 }) {
   const router = useRouter();
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(doc.content);
   const [isPending, startTransition] = useTransition();
   const [copied, setCopied] = useState(false);
+  // Set when someone else holds the lock and we tried to edit.
+  const [lockedBy, setLockedBy] = useState<string | null>(null);
+
+  // Locked by another user (from the server's initial render).
+  const lockedByOther = lock.active && !lock.mine;
 
   function run(fn: () => Promise<unknown>) {
     startTransition(async () => {
@@ -82,6 +94,55 @@ export function DocumentDetail({
       router.refresh();
     });
   }
+
+  // Request the lock; only enter edit mode if we got it.
+  function onEdit() {
+    startTransition(async () => {
+      const res = await acquireEditLock(doc.id);
+      if (res.ok) {
+        setDraft(doc.content);
+        setEditing(true);
+      } else {
+        setLockedBy(res.lockedBy);
+      }
+    });
+  }
+
+  function onCancel() {
+    // The heartbeat effect's cleanup releases the lock when editing flips off.
+    setEditing(false);
+  }
+
+  // Admin: force-clear another user's lock, then take it over.
+  function onForceUnlock() {
+    startTransition(async () => {
+      await forceReleaseEditLock(projectId, doc.id);
+      const res = await acquireEditLock(doc.id);
+      if (res.ok) {
+        setLockedBy(null);
+        setDraft(doc.content);
+        setEditing(true);
+        router.refresh();
+      }
+    });
+  }
+
+  // Keep the lock alive while editing; release it on cancel/leave/unmount.
+  useEffect(() => {
+    if (!editing) return;
+    const iv = setInterval(async () => {
+      const res = await heartbeatEditLock(doc.id);
+      if (!res.ok) {
+        // Lost the lock (it went stale and was taken over).
+        setEditing(false);
+        setLockedBy("another user");
+      }
+    }, LOCK_HEARTBEAT_MS);
+    return () => {
+      clearInterval(iv);
+      void releaseEditLock(doc.id);
+    };
+  }, [editing, doc.id]);
 
   function onSave() {
     startTransition(async () => {
@@ -109,6 +170,45 @@ export function DocumentDetail({
 
   return (
     <div>
+      {/* edit-lock modal */}
+      {lockedBy && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+          onClick={() => setLockedBy(null)}
+        >
+          <div
+            className="w-full max-w-sm rounded-xl border border-border bg-surface p-5 shadow-xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="mb-2 flex items-center gap-2 text-amber-300">
+              <Lock size={18} />
+              <h2 className="text-sm font-semibold">Document is being edited</h2>
+            </div>
+            <p className="text-sm text-muted">
+              <span className="font-medium text-fg">{lockedBy}</span> is currently editing this
+              document. You can’t edit it until they finish or the lock expires.
+            </p>
+            <div className="mt-4 flex justify-end gap-2">
+              {perms.canAdmin && (
+                <button
+                  onClick={onForceUnlock}
+                  disabled={isPending}
+                  className="inline-flex items-center gap-1.5 rounded-lg border border-amber-500/40 bg-amber-500/10 px-3 py-1.5 text-sm text-amber-300 hover:bg-amber-500/20 disabled:opacity-50"
+                >
+                  <Lock size={13} /> Force unlock (Admin)
+                </button>
+              )}
+              <button
+                onClick={() => setLockedBy(null)}
+                className="rounded-lg border border-border bg-surface px-3 py-1.5 text-sm hover:bg-surface-2"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* header */}
       <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
         <div>
@@ -142,13 +242,18 @@ export function DocumentDetail({
       <div className="mb-4 flex flex-wrap items-center gap-2">
         {!editing && perms.canEdit && (
           <button
-            onClick={() => {
-              setDraft(doc.content);
-              setEditing(true);
-            }}
-            className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-surface px-3 py-1.5 text-sm hover:bg-surface-2"
+            onClick={onEdit}
+            disabled={isPending}
+            className={cn(
+              "inline-flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-sm disabled:opacity-50",
+              lockedByOther
+                ? "border-amber-500/40 bg-amber-500/10 text-amber-300 hover:bg-amber-500/20"
+                : "border-border bg-surface hover:bg-surface-2"
+            )}
+            title={lockedByOther ? `${lock.byName} is editing this document` : undefined}
           >
-            <Pencil size={14} /> Edit
+            {lockedByOther ? <Lock size={14} /> : <Pencil size={14} />}
+            {lockedByOther ? `Locked by ${lock.byName}` : "Edit"}
           </button>
         )}
         {editing && (
@@ -161,7 +266,7 @@ export function DocumentDetail({
               <Save size={14} /> Save
             </button>
             <button
-              onClick={() => setEditing(false)}
+              onClick={onCancel}
               className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-surface px-3 py-1.5 text-sm hover:bg-surface-2"
             >
               <X size={14} /> Cancel

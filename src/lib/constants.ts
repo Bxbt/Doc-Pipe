@@ -145,3 +145,9 @@ export const SMART_CHECKLIST: Record<string, { label: string; type?: DocType }[]
     { label: "Deployment Checklist", type: "DEPLOYMENT_CHECKLIST" },
   ],
 };
+
+// Pessimistic document edit lock timing.
+// A lock with no heartbeat for LOCK_TTL_MS is treated as stale (can be taken
+// over). The editor sends a heartbeat every LOCK_HEARTBEAT_MS while open.
+export const LOCK_TTL_MS = 90_000;
+export const LOCK_HEARTBEAT_MS = 30_000;
