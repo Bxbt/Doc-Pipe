@@ -24,8 +24,8 @@ go out of date. No more drifting docs.
 | **Project Health** | Completion % overall and per phase (Requirement → Design → API → Testing → Release) |
 | **Business Types** | Editable per-type "generate pipeline" (which documents + dependencies get scaffolded) |
 | **Smart Checklist** | Recommended documents per business type |
-| **Document Editor** | Markdown editing, **Mermaid diagrams**, **file attachments**, versioning, copy, export `.md` |
-| **Attachments** | Upload images / PDF / Word / Excel / CSV / zip (≤10 MB); inline preview for images & PDF |
+| **Document Editor** | **Notion-style block editor** (BlockNote) over Markdown — headings, tables, checklists, **Mermaid diagrams**, code blocks; versioning, copy, export `.md` |
+| **Attachments** | Upload images / PDF / Word / Excel / CSV / zip (≤10 MB); inline preview for images & PDF. Browse, paste, or drag images straight into a document |
 | **Templates** | Editable template library (create / edit / delete); new documents draw starter content from it |
 | **Roles** | Admin · Editor · Reviewer · Viewer (authorization enforced server-side) |
 | **Project meta** | Customer, business type, status, start/end dates |
@@ -37,6 +37,7 @@ go out of date. No more drifting docs.
 - **Next.js 14** (App Router, Server Actions + Route Handlers) + **React 18** + **TypeScript**
 - **Tailwind CSS** (dark mode by default)
 - **Prisma** ORM + **SQLite** (single file, zero external DB to run)
+- **BlockNote** block editor (loads/saves Markdown, so content stays plain text)
 - **Mermaid** for diagrams (lazy-loaded client-side)
 - **Docker** + **Cloudflare Tunnel** + **Cloudflare Access** for production
 
@@ -144,7 +145,7 @@ src/
     (pages)              # dashboard, projects, documents, business-types, templates, team, search
     api/                 # route handlers: attachment upload + download/serve
   components/            # DependencyGraph (hero), ProjectWorkspace, DocumentDetail,
-                         #   Mermaid, AttachmentPanel, TemplatesManager, BusinessTypesManager, …
+                         #   BlockEditor, Mermaid, AttachmentPanel, TemplatesManager, BusinessTypesManager, …
   lib/
     graph.ts             # pure downstream/upstream traversal — powers impact + traceability
     actions.ts           # server actions (markChanged, scaffoldPipeline, reorderDocument, …)

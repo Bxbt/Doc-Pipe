@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
+import dynamic from "next/dynamic";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
@@ -30,6 +31,12 @@ import {
   removeDependency,
 } from "@/lib/actions";
 import { Plus } from "lucide-react";
+
+// BlockNote is client-only (touches window/document) — load without SSR.
+const BlockEditor = dynamic(
+  () => import("./BlockEditor").then((m) => m.BlockEditor),
+  { ssr: false, loading: () => <p className="text-sm text-muted">Loading editor…</p> }
+);
 
 type RelDoc = { id: string; type: string; status: string };
 type PickDoc = { id: string; type: string; title: string };
@@ -210,12 +217,7 @@ export function DocumentDetail({
         {/* content */}
         <div className="rounded-xl border border-border bg-surface p-6">
           {editing ? (
-            <textarea
-              value={draft}
-              onChange={(e) => setDraft(e.target.value)}
-              spellCheck={false}
-              className="min-h-[60vh] w-full resize-y bg-transparent font-mono text-sm outline-none"
-            />
+            <BlockEditor docId={doc.id} initialMarkdown={doc.content} onChange={setDraft} />
           ) : (
             <Markdown>{doc.content || "_No content yet._"}</Markdown>
           )}

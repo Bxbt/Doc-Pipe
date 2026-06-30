@@ -111,3 +111,15 @@ body {
   max-width: 100%;
   height: auto;
 }
+
+/* BlockNote (POC rich editor) — blend into the surface card */
+.bn-wrap .bn-container,
+.bn-wrap .bn-editor {
+  background: transparent;
+}
+.bn-wrap .bn-editor {
+  padding-inline: 0;
+}
+.bn-wrap[data-ready="false"] {
+  opacity: 0.4;
+}
