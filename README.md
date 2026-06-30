@@ -1,8 +1,10 @@
-# Project Document Pipeline
+# Doc-Pipe — Project Document Pipeline
 
 Connect every project document into one **living pipeline**. Change a requirement and
 instantly see which downstream documents (SRS → User Story → API → Test Case → UAT → Release)
 go out of date. No more drifting docs.
+
+Live: **https://doc-pipe.bboybezz.xyz**
 
 > Built end-to-end **by prompting AI only** — no code written by hand — for a Friday Sharing.
 > The application itself contains **no AI at runtime**; every "smart" feature (impact analysis,
@@ -16,26 +18,33 @@ go out of date. No more drifting docs.
 | Feature | What it does |
 | --- | --- |
 | **Dashboard** | Active projects, total/outdated/pending documents, recent activity, missing docs |
-| **Document Pipeline** | Every project's documents shown as a connected, ordered pipeline |
-| **Dependency Graph** ⭐ | Click any document → all downstream documents light up. The hero feature. |
+| **Document Pipeline** | A project's documents as a connected pipeline; reorder with ↑/↓ |
+| **Dependency Graph** ⭐ | Click a document → all downstream documents light up. The hero feature. |
 | **Impact Analysis** | "Mark as changed" → every downstream document is flagged **Outdated** automatically |
+| **Edit dependencies** | Add/remove links between documents from the graph or the document view (cycle-protected) |
 | **Traceability Matrix** | For each requirement, see which SRS / User Story / API / Test / UAT it traces to |
 | **Project Health** | Completion % overall and per phase (Requirement → Design → API → Testing → Release) |
-| **Smart Checklist** | Recommended documents per business type (E-Commerce, HR, Banking, …) |
-| **Document Editor** | Markdown editing, versioning, copy, export `.md`, review/approve workflow |
+| **Business Types** | Editable per-type "generate pipeline" (which documents + dependencies get scaffolded) |
+| **Smart Checklist** | Recommended documents per business type |
+| **Document Editor** | Markdown editing, **Mermaid diagrams**, **file attachments**, versioning, copy, export `.md` |
+| **Attachments** | Upload images / PDF / Word / Excel / CSV / zip (≤10 MB); inline preview for images & PDF |
+| **Templates** | Editable template library (create / edit / delete); new documents draw starter content from it |
 | **Roles** | Admin · Editor · Reviewer · Viewer (authorization enforced server-side) |
+| **Project meta** | Customer, business type, status, start/end dates |
 | **Search** | Global search across projects and documents |
-| **Templates** | Built-in starters for BR, FR, SRS, BOI SRS, User Story, API, Test, UAT, Rollback, … |
+| **Audit log** | Activity feed; entries survive even after a project is deleted |
 
 ## 🧱 Tech Stack
 
-- **Next.js 14** (App Router, Server Actions) + **React 18** + **TypeScript**
+- **Next.js 14** (App Router, Server Actions + Route Handlers) + **React 18** + **TypeScript**
 - **Tailwind CSS** (dark mode by default)
 - **Prisma** ORM + **SQLite** (single file, zero external DB to run)
+- **Mermaid** for diagrams (lazy-loaded client-side)
 - **Docker** + **Cloudflare Tunnel** + **Cloudflare Access** for production
 
 Authentication is **delegated to Cloudflare Access** — the app reads the verified
 `Cf-Access-Authenticated-User-Email` header, so there is no password code to maintain.
+The app only handles **authorization** (roles).
 
 ---
 
@@ -49,6 +58,16 @@ npm run dev           # http://localhost:3000
 
 Locally there is no Cloudflare header, so the app signs you in as `DEV_EMAIL` from `.env`.
 Change `DEV_EMAIL` to test different users/roles. Emails in `ADMIN_EMAILS` are always Admin.
+
+### Environment variables
+
+| Var | Purpose | Default |
+| --- | --- | --- |
+| `DATABASE_URL` | SQLite file location | `file:./dev.db` (prod: `file:/data/app.db`) |
+| `UPLOAD_DIR` | Where attachments are stored | derived from `DATABASE_URL` dir (prod: `/data/uploads`) |
+| `ADMIN_EMAILS` | Comma-separated emails always treated as Admin | — |
+| `DEV_EMAIL` | Local-only signed-in identity (ignored behind Cloudflare Access) | `dev@localhost` |
+| `SEED_ON_EMPTY` | Seed demo data once on an empty DB | `true` |
 
 ### Useful scripts
 
@@ -65,33 +84,43 @@ Change `DEV_EMAIL` to test different users/roles. Emails in `ADMIN_EMAILS` are a
 ## 🐳 Deploy on Oracle Cloud (ARM) with Portainer + Cloudflare
 
 This stack opens **no inbound ports** on the server — Cloudflare Tunnel dials out.
+The container entrypoint runs `prisma db push` on every boot, so schema changes apply
+automatically, and seeds the demo **once** (a `/data/.seeded` marker prevents re-seeding,
+and existing data is never overwritten).
 
 ### 1. Create a Cloudflare Tunnel
 1. Cloudflare dashboard → **Zero Trust → Networks → Tunnels → Create a tunnel** (type *Cloudflared*).
-2. Add a **Public Hostname**: `pipeline.bboybezz.xyz` → Service `HTTP` → `http://app:3000`.
+2. Add a **Public Hostname**: `doc-pipe.bboybezz.xyz` → Service `HTTP` → `http://app:3000`.
 3. Copy the **tunnel token**.
 
 ### 2. Gate it with Cloudflare Access (this is your login)
 1. Zero Trust → **Access → Applications → Add an application** (Self-hosted).
-2. Application domain: `pipeline.bboybezz.xyz`.
-3. Add a policy → Action **Allow** → Include **Emails** = your team's emails
-   (e.g. `na.thanabodee@gmail.com`). Use Google as the login method.
-
-Now only approved emails can reach the app, and the app receives their verified email.
+2. Application domain: `doc-pipe.bboybezz.xyz`.
+3. Add a policy → Action **Allow** → Include **Emails** = your team's emails. Use Google login.
 
 ### 3. Deploy the stack in Portainer
-1. **Stacks → Add stack**, paste `docker-compose.yml`.
-2. Set environment variables:
-   - `TUNNEL_TOKEN` = the token from step 1
-   - `ADMIN_EMAILS` = `na.thanabodee@gmail.com` (comma-separated for more)
-   - `SEED_ON_EMPTY` = `true` (seeds the demo once; never overwrites later)
-3. Deploy. Portainer builds the image (arm64 on Ampere) and starts `app` + `cloudflared`.
+Deploy `docker-compose.yml` (App from **Repository** `Bxbt/Doc-Pipe`, or paste the file),
+with environment variables:
 
-Visit **https://pipeline.bboybezz.xyz** → Cloudflare Access login → you're in as Admin.
+- `TUNNEL_TOKEN` = the tunnel token from step 1
+- `ADMIN_EMAILS` = `na.thanabodee@gmail.com` (comma-separated for more)
+- `SEED_ON_EMPTY` = `true`
 
-> **Build note:** Apple Silicon and Oracle Ampere are both `arm64`, so building locally and
-> pushing, or building on the server, produces the correct Prisma engine. If you ever build on
-> x86 for an ARM target, use `docker buildx build --platform linux/arm64`.
+Portainer builds the arm64 image and starts `app` + `cloudflared`.
+
+**Redeploy after a push** (pulls the latest commit + rebuilds) via the Portainer API:
+
+```bash
+curl -sk -X PUT "https://152.69.208.12:9443/api/stacks/19/git/redeploy?endpointId=3" \
+  -H "X-API-Key: <portainer-token>" -H "Content-Type: application/json" \
+  -d '{"RepositoryReferenceName":"refs/heads/main","Env":[
+        {"name":"ADMIN_EMAILS","value":"na.thanabodee@gmail.com"},
+        {"name":"SEED_ON_EMPTY","value":"true"},
+        {"name":"TUNNEL_TOKEN","value":"<tunnel-token>"}]}'
+```
+
+> **Build note:** Apple Silicon and Oracle Ampere are both `arm64`. To build on x86 for ARM:
+> `docker buildx build --platform linux/arm64`.
 
 ### 4. Backups
 The `pipeline-data` volume holds both the SQLite DB (`/data/app.db`) and uploaded
@@ -108,19 +137,28 @@ docker run --rm -v pipeline-data:/data -v "$PWD":/backup alpine \
 
 ```
 prisma/
-  schema.prisma        # User, Project, Document, DocumentDependency, …
-  seed.ts              # demo project "Meeting Room Booking System"
+  schema.prisma          # User, Project, Document, DocumentDependency, Template,
+                         #   BusinessType, Attachment, DocumentVersion, Comment, Activity
+  seed.ts                # demo project "Meeting Room Booking System"
+  seed-if-empty.ts       # one-time seed guarded by a /data/.seeded marker
 src/
-  app/                 # routes: dashboard, projects, documents, team, search, templates
-  components/          # DependencyGraph (hero), ProjectWorkspace, DocumentDetail, …
+  app/
+    (pages)              # dashboard, projects, documents, business-types, templates, team, search
+    api/                 # route handlers: attachment upload + download/serve
+  components/            # DependencyGraph (hero), ProjectWorkspace, DocumentDetail,
+                         #   Mermaid, AttachmentPanel, TemplatesManager, BusinessTypesManager, …
   lib/
-    graph.ts           # pure downstream/upstream traversal — powers impact + traceability
-    actions.ts         # server actions: markChanged, saveDocument, setStatus, …
-    auth.ts            # Cloudflare Access identity + role checks
-    queries.ts         # health, missing docs, dashboard aggregation
-    constants.ts       # document types, statuses, roles, smart checklists
+    graph.ts             # pure downstream/upstream traversal — powers impact + traceability
+    actions.ts           # server actions (markChanged, scaffoldPipeline, reorderDocument, …)
+    auth.ts              # Cloudflare Access identity + role checks
+    queries.ts           # health, missing docs, dashboard aggregation
+    business-types.ts    # business-type pipeline definitions (DB-backed, auto-seeded)
+    templates-db.ts      # editable template library (DB-backed, auto-seeded)
+    storage.ts           # attachment storage (filesystem on the volume) — server only
+    constants.ts         # document types, statuses, roles, smart checklists, standard pipeline
 Dockerfile
-docker-compose.yml     # app + cloudflared
+docker-compose.yml       # app + cloudflared
+docker-entrypoint.sh     # prisma db push → seed-once → next start
 ```
 
 ## 🧠 How the "smart" features work (no AI)
