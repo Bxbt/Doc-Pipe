@@ -9,3 +9,6 @@ build
 prisma/*.db
 prisma/*.db-journal
 prisma/dev.db*
+
+# TS build cache
+tsconfig.tsbuildinfo

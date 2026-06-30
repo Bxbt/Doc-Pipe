@@ -88,10 +88,14 @@ Derived from FR-1 … FR-8.
     status: "InReview",
     content: `# Booking Flow
 
-\`\`\`
-User -> Select Room -> Pick Time Slot -> Check Availability
-   -> [Available?] -- no --> Show conflict
-                   -- yes --> Confirm -> Save Booking -> Send Email
+\`\`\`mermaid
+flowchart TD
+  A[User selects room] --> B[Pick time slot]
+  B --> C{Slot available?}
+  C -- No --> D[Show conflict]
+  C -- Yes --> E[Confirm booking]
+  E --> F[Save booking]
+  F --> G[Send confirmation email]
 \`\`\`
 
 The flow covers the happy path (FR-3) and the conflict path (FR-4).`,
