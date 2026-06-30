@@ -5,6 +5,7 @@ import { createProject } from "@/lib/actions";
 import { getCurrentUser, canEdit } from "@/lib/auth";
 import { getBusinessTypes } from "@/lib/business-types";
 import { PageHeader } from "@/components/ui";
+import { Select, DatePicker } from "@/components/inputs";
 
 export const dynamic = "force-dynamic";
 
@@ -58,31 +59,18 @@ export default async function NewProjectPage() {
             />
           </Field>
           <Field label="Business type">
-            <select
+            <Select
               name="businessType"
-              className="w-full rounded-lg border border-border bg-bg px-3 py-2 text-sm outline-none focus:border-brand"
-            >
-              {BUSINESS_TYPES.map((t) => (
-                <option key={t} value={t}>
-                  {t}
-                </option>
-              ))}
-            </select>
+              defaultValue={BUSINESS_TYPES[0] ?? "Generic"}
+              options={BUSINESS_TYPES.map((t) => ({ value: t, label: t }))}
+            />
           </Field>
           <div className="grid grid-cols-2 gap-4">
             <Field label="Start date">
-              <input
-                type="date"
-                name="startDate"
-                className="w-full rounded-lg border border-border bg-bg px-3 py-2 text-sm outline-none focus:border-brand"
-              />
+              <DatePicker name="startDate" />
             </Field>
             <Field label="End date">
-              <input
-                type="date"
-                name="endDate"
-                className="w-full rounded-lg border border-border bg-bg px-3 py-2 text-sm outline-none focus:border-brand"
-              />
+              <DatePicker name="endDate" />
             </Field>
           </div>
           <Field label="Description">

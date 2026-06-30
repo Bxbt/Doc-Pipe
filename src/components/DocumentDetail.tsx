@@ -20,6 +20,8 @@ import {
 } from "lucide-react";
 import { Markdown } from "./Markdown";
 import { AttachmentPanel } from "./AttachmentPanel";
+import { Select } from "./inputs";
+import { useScrollLock } from "./useScrollLock";
 import { StatusBadge } from "./badges";
 import { docLabel, docShort, LOCK_HEARTBEAT_MS } from "@/lib/constants";
 import { cn } from "@/lib/utils";
@@ -84,6 +86,7 @@ export function DocumentDetail({
   const [copied, setCopied] = useState(false);
   // Set when someone else holds the lock and we tried to edit.
   const [lockedBy, setLockedBy] = useState<string | null>(null);
+  useScrollLock(!!lockedBy);
 
   // Locked by another user (from the server's initial render).
   const lockedByOther = lock.active && !lock.mine;
@@ -433,22 +436,16 @@ function RelatedPanel({
       </div>
 
       {adding && (
-        <select
-          autoFocus
-          defaultValue=""
-          disabled={isPending}
-          onChange={(e) => e.target.value && link(e.target.value)}
-          className="mb-2 w-full rounded-lg border border-border bg-bg px-2 py-1.5 text-xs outline-none focus:border-brand"
-        >
-          <option value="" disabled>
-            Select a document…
-          </option>
-          {options.map((d) => (
-            <option key={d.id} value={d.id}>
-              {docLabel(d.type)} — {d.title}
-            </option>
-          ))}
-        </select>
+        <div className="mb-2">
+          <Select
+            value=""
+            disabled={isPending}
+            placeholder="Select a document…"
+            onChange={(v) => v && link(v)}
+            options={options.map((d) => ({ value: d.id, label: `${docLabel(d.type)} — ${d.title}` }))}
+            className="text-xs"
+          />
+        </div>
       )}
       {err && <p className="mb-2 text-[11px] text-red-400">{err}</p>}
 

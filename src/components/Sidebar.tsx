@@ -14,11 +14,12 @@ import {
   X,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useScrollLock } from "./useScrollLock";
 
 const nav = [
   { href: "/", label: "Dashboard", icon: LayoutDashboard },
   { href: "/projects", label: "Projects", icon: FolderKanban },
-  { href: "/templates", label: "Templates", icon: FileText },
+  { href: "/templates", label: "Document Library", icon: FileText },
   { href: "/business-types", label: "Business Types", icon: Boxes },
   { href: "/team", label: "Team", icon: Users },
 ];
@@ -109,6 +110,7 @@ export function Sidebar({
   mobileOpen: boolean;
   onCloseMobile: () => void;
 }) {
+  useScrollLock(mobileOpen);
   return (
     <>
       {/* Desktop Sidebar */}

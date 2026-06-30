@@ -22,11 +22,12 @@ go out of date. No more drifting docs.
 | **Edit dependencies** | Add/remove links between documents from the graph or the document view (cycle-protected) |
 | **Traceability Matrix** | For each requirement, see which SRS / User Story / API / Test / UAT it traces to |
 | **Project Health** | Completion % overall and per phase (Requirement → Design → API → Testing → Release) |
-| **Business Types** | Editable per-type "generate pipeline" (which documents + dependencies get scaffolded) |
+| **Business Types** | Editable per-type "generate pipeline" (which documents + dependencies get scaffolded); the document choices come from the Document Library |
 | **Smart Checklist** | Recommended documents per business type |
 | **Document Editor** | **Notion-style block editor** (BlockNote) over Markdown — headings, tables, checklists, **Mermaid diagrams**, code blocks; versioning, copy, export `.md` |
 | **Attachments** | Upload images / PDF / Word / Excel / CSV / zip (≤10 MB); inline preview for images & PDF. Browse, paste, or drag images straight into a document |
-| **Templates** | Editable template library (create / edit / delete); new documents draw starter content from it |
+| **Document Library** | Editable catalogue of reusable documents (create / edit / delete) edited with the same block editor; new project documents draw starter content from it, and Business Type pickers list from it |
+| **Custom inputs** | App-wide styled dropdowns and a calendar date picker (portal-based, theme-aware) |
 | **Edit lock** | One person edits a document at a time; others see a "being edited" modal and can't enter. Stale locks (no heartbeat for 90s) auto-release so a closed tab never deadlocks; admins can force-unlock |
 | **Roles** | Admin · Editor · Reviewer · Viewer (authorization enforced server-side) |
 | **Project meta** | Customer, business type, status, start/end dates |

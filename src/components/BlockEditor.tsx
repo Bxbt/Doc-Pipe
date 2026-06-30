@@ -18,29 +18,36 @@ export function BlockEditor({
   initialMarkdown,
   onChange,
 }: {
-  docId: string;
+  // When set, images browse/paste/drag upload through that document's
+  // attachment API. Without it (e.g. the Document Library), images can still be
+  // embedded by URL — there is just no per-document upload target.
+  docId?: string;
   initialMarkdown: string;
   onChange: (markdown: string) => void;
 }) {
   // Browse / paste / drag images straight into the content — routed through the
   // existing attachment API (volume storage, MIME + size validation). Returns
   // the served URL so it embeds as ![](…/api/attachments/<id>) markdown.
-  const editor = useCreateBlockNote({
-    uploadFile: async (file: File) => {
-      const fd = new FormData();
-      fd.append("file", file);
-      const res = await fetch(`/api/documents/${docId}/attachments`, {
-        method: "POST",
-        body: fd,
-      });
-      if (!res.ok) {
-        const body = await res.json().catch(() => ({}));
-        throw new Error(body.error || "Upload failed");
-      }
-      const { id } = await res.json();
-      return `/api/attachments/${id}`;
-    },
-  });
+  const editor = useCreateBlockNote(
+    docId
+      ? {
+          uploadFile: async (file: File) => {
+            const fd = new FormData();
+            fd.append("file", file);
+            const res = await fetch(`/api/documents/${docId}/attachments`, {
+              method: "POST",
+              body: fd,
+            });
+            if (!res.ok) {
+              const body = await res.json().catch(() => ({}));
+              throw new Error(body.error || "Upload failed");
+            }
+            const { id } = await res.json();
+            return `/api/attachments/${id}`;
+          },
+        }
+      : {}
+  );
   const [ready, setReady] = useState(false);
   // Suppress the onChange that fires while we load the initial content.
   const loadingRef = useRef(true);

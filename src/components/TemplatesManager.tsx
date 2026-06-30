@@ -1,11 +1,19 @@
 "use client";
 
 import { useState, useTransition } from "react";
+import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
 import { Plus, Pencil, Trash2, X, Save } from "lucide-react";
 import { CopyButton } from "./CopyButton";
 import { Card } from "./ui";
+import { useScrollLock } from "./useScrollLock";
 import { createTemplate, updateTemplate, deleteTemplate } from "@/lib/actions";
+
+// Same block editor as documents — loaded without SSR (BlockNote is client-only).
+const BlockEditor = dynamic(
+  () => import("./BlockEditor").then((m) => m.BlockEditor),
+  { ssr: false, loading: () => <p className="text-sm text-muted">Loading editor…</p> }
+);
 
 type T = {
   id: string;
@@ -21,6 +29,7 @@ export function TemplatesManager({ templates, canEdit }: { templates: T[]; canEd
   const router = useRouter();
   const [draft, setDraft] = useState<Draft | null>(null);
   const [isPending, startTransition] = useTransition();
+  useScrollLock(!!draft);
 
   function save() {
     if (!draft) return;
@@ -44,7 +53,7 @@ export function TemplatesManager({ templates, canEdit }: { templates: T[]; canEd
   }
 
   function remove(id: string) {
-    if (!confirm("Delete this template?")) return;
+    if (!confirm("Delete this document?")) return;
     startTransition(async () => {
       await deleteTemplate(id);
       router.refresh();
@@ -56,10 +65,10 @@ export function TemplatesManager({ templates, canEdit }: { templates: T[]; canEd
       {canEdit && (
         <div className="mb-4">
           <button
-            onClick={() => setDraft({ id: null, name: "", description: "", content: "# New Template\n\n" })}
+            onClick={() => setDraft({ id: null, name: "", description: "", content: "# New Document\n\n" })}
             className="inline-flex items-center gap-1.5 rounded-lg bg-brand px-3.5 py-2 text-sm font-medium text-brand-fg hover:opacity-90"
           >
-            <Plus size={15} /> New template
+            <Plus size={15} /> New document
           </button>
         </div>
       )}
@@ -97,7 +106,7 @@ export function TemplatesManager({ templates, canEdit }: { templates: T[]; canEd
                   <button
                     onClick={() => remove(t.id)}
                     disabled={isPending}
-                    title="Delete template"
+                    title="Delete document"
                     className="ml-auto flex h-8 w-8 items-center justify-center rounded-lg border border-border text-muted hover:border-red-500/40 hover:text-red-400 disabled:opacity-50"
                   >
                     <Trash2 size={14} />
@@ -117,7 +126,7 @@ export function TemplatesManager({ templates, canEdit }: { templates: T[]; canEd
         >
           <div className="flex max-h-[88vh] w-full max-w-2xl flex-col rounded-xl border border-border bg-surface">
             <div className="flex items-center justify-between border-b border-border px-5 py-3">
-              <h2 className="text-sm font-semibold">{draft.id ? "Edit template" : "New template"}</h2>
+              <h2 className="text-sm font-semibold">{draft.id ? "Edit document" : "New document"}</h2>
               <button
                 onClick={() => setDraft(null)}
                 className="flex h-8 w-8 items-center justify-center rounded-lg text-muted hover:text-fg"
@@ -142,16 +151,15 @@ export function TemplatesManager({ templates, canEdit }: { templates: T[]; canEd
                   className="rounded-lg border border-border bg-bg px-3 py-2 text-sm outline-none focus:border-brand"
                 />
               </label>
-              <label className="flex flex-col gap-1.5">
-                <span className="text-xs font-medium text-muted">Content (Markdown)</span>
-                <textarea
-                  value={draft.content}
-                  onChange={(e) => setDraft({ ...draft, content: e.target.value })}
-                  spellCheck={false}
-                  rows={16}
-                  className="resize-y rounded-lg border border-border bg-bg px-3 py-2 font-mono text-xs outline-none focus:border-brand"
-                />
-              </label>
+              <div className="flex flex-col gap-1.5">
+                <span className="text-xs font-medium text-muted">Content</span>
+                <div className="rounded-lg border border-border bg-bg px-3 py-2">
+                  <BlockEditor
+                    initialMarkdown={draft.content}
+                    onChange={(md) => setDraft((d) => (d ? { ...d, content: md } : d))}
+                  />
+                </div>
+              </div>
             </div>
             <div className="flex justify-end gap-2 border-t border-border px-5 py-3">
               <button

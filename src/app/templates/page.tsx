@@ -11,8 +11,8 @@ export default async function TemplatesPage() {
   return (
     <div>
       <PageHeader
-        title="Template Library"
-        subtitle="Built-in starting points for every document type. Edit, add, or copy."
+        title="Document Library"
+        subtitle="Reusable document definitions and starting content. Edit, add, or copy — these power the pickers in Business Types."
       />
       <TemplatesManager
         canEdit={canEdit(user)}

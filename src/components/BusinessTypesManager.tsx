@@ -4,6 +4,8 @@ import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Plus, Pencil, Trash2, X, Save, ArrowRight } from "lucide-react";
 import { Card } from "./ui";
+import { Select } from "./inputs";
+import { useScrollLock } from "./useScrollLock";
 import { createBusinessType, updateBusinessType, deleteBusinessType } from "@/lib/actions";
 
 type DocOption = { type: string; label: string };
@@ -129,6 +131,9 @@ function Editor({
 }) {
   const [edgeFrom, setEdgeFrom] = useState("");
   const [edgeTo, setEdgeTo] = useState("");
+  useScrollLock(true); // this component only mounts while the modal is open
+
+
 
   function toggleDoc(type: string) {
     const has = draft.docTypes.includes(type);
@@ -215,19 +220,21 @@ function Editor({
               ))}
             </div>
             <div className="flex flex-wrap items-center gap-2">
-              <select value={edgeFrom} onChange={(e) => setEdgeFrom(e.target.value)} className="rounded-lg border border-border bg-bg px-2 py-1.5 text-xs outline-none focus:border-brand">
-                <option value="">source…</option>
-                {selected.map((d) => (
-                  <option key={d.type} value={d.type}>{d.label}</option>
-                ))}
-              </select>
+              <Select
+                value={edgeFrom}
+                onChange={setEdgeFrom}
+                placeholder="source…"
+                options={selected.map((d) => ({ value: d.type, label: d.label }))}
+                className="w-40 text-xs"
+              />
               <ArrowRight size={12} className="text-muted" />
-              <select value={edgeTo} onChange={(e) => setEdgeTo(e.target.value)} className="rounded-lg border border-border bg-bg px-2 py-1.5 text-xs outline-none focus:border-brand">
-                <option value="">depends…</option>
-                {selected.map((d) => (
-                  <option key={d.type} value={d.type}>{d.label}</option>
-                ))}
-              </select>
+              <Select
+                value={edgeTo}
+                onChange={setEdgeTo}
+                placeholder="depends…"
+                options={selected.map((d) => ({ value: d.type, label: d.label }))}
+                className="w-40 text-xs"
+              />
               <button onClick={addEdge} className="rounded-lg border border-border bg-surface px-2.5 py-1.5 text-xs hover:bg-surface-2">
                 Add link
               </button>

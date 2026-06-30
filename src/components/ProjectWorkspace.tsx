@@ -18,6 +18,7 @@ import {
 import { DependencyGraph, type GraphNode } from "./DependencyGraph";
 import { StatusBadge } from "./badges";
 import { ProgressBar } from "./ui";
+import { Select, DatePicker } from "./inputs";
 import { docLabel, docShort, DOC_TYPES } from "@/lib/constants";
 import { timeAgo, cn } from "@/lib/utils";
 import type { Edge } from "@/lib/graph";
@@ -120,17 +121,12 @@ function AddDocBar({ projectId, perms }: { projectId: string; perms: Props["perm
 
   return (
     <div className="flex flex-wrap items-center gap-2">
-      <select
+      <Select
         value={type}
-        onChange={(e) => setType(e.target.value)}
-        className="rounded-lg border border-border bg-bg px-2.5 py-1.5 text-sm outline-none focus:border-brand"
-      >
-        {DOC_TYPES.map((d) => (
-          <option key={d.type} value={d.type}>
-            {d.label}
-          </option>
-        ))}
-      </select>
+        onChange={setType}
+        options={DOC_TYPES.map((d) => ({ value: d.type, label: d.label }))}
+        className="w-56"
+      />
       <button
         onClick={() =>
           startTransition(async () => {
@@ -449,26 +445,28 @@ function Settings({ projectId, project, perms, businessTypeNames }: Props) {
         </L>
         <div className="grid grid-cols-2 gap-4">
           <L label="Business type">
-            <select value={form.businessType} onChange={(e) => setForm({ ...form, businessType: e.target.value })} className={inputCls}>
-              {Array.from(new Set([form.businessType, ...businessTypeNames])).filter(Boolean).map((t) => (
-                <option key={t} value={t}>{t}</option>
-              ))}
-            </select>
+            <Select
+              value={form.businessType}
+              onChange={(v) => setForm({ ...form, businessType: v })}
+              options={Array.from(new Set([form.businessType, ...businessTypeNames]))
+                .filter(Boolean)
+                .map((t) => ({ value: t, label: t }))}
+            />
           </L>
           <L label="Status">
-            <select value={form.status} onChange={(e) => setForm({ ...form, status: e.target.value })} className={inputCls}>
-              {["Active", "OnHold", "Done", "Archived"].map((s) => (
-                <option key={s} value={s}>{s}</option>
-              ))}
-            </select>
+            <Select
+              value={form.status}
+              onChange={(v) => setForm({ ...form, status: v })}
+              options={["Active", "OnHold", "Done", "Archived"].map((s) => ({ value: s, label: s }))}
+            />
           </L>
         </div>
         <div className="grid grid-cols-2 gap-4">
           <L label="Start date">
-            <input type="date" value={form.startDate} onChange={(e) => setForm({ ...form, startDate: e.target.value })} className={inputCls} />
+            <DatePicker value={form.startDate} onChange={(v) => setForm({ ...form, startDate: v })} />
           </L>
           <L label="End date">
-            <input type="date" value={form.endDate} onChange={(e) => setForm({ ...form, endDate: e.target.value })} className={inputCls} />
+            <DatePicker value={form.endDate} onChange={(v) => setForm({ ...form, endDate: v })} />
           </L>
         </div>
         <L label="Description">

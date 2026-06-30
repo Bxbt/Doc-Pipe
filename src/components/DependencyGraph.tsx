@@ -4,6 +4,7 @@ import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { Zap, ExternalLink, X } from "lucide-react";
+import { Select } from "./inputs";
 import { DOC_TYPE_MAP, docShort, docLabel } from "@/lib/constants";
 import { downstreamOf, directDependencies, directDependents, type Edge } from "@/lib/graph";
 import { markChanged, addDependency, removeDependency } from "@/lib/actions";
@@ -312,19 +313,14 @@ function LinkEditor({
         ))}
       </div>
       {addable.length > 0 && (
-        <select
+        <Select
           value=""
           disabled={disabled}
-          onChange={(e) => e.target.value && onAdd(e.target.value)}
-          className="w-full rounded-lg border border-border bg-bg px-2 py-1.5 text-xs outline-none focus:border-brand"
-        >
-          <option value="">+ add…</option>
-          {addable.map((id) => (
-            <option key={id} value={id}>
-              {labelOf(id)}
-            </option>
-          ))}
-        </select>
+          placeholder="+ add…"
+          onChange={(v) => v && onAdd(v)}
+          options={addable.map((id) => ({ value: id, label: labelOf(id) }))}
+          className="text-xs"
+        />
       )}
     </div>
   );
