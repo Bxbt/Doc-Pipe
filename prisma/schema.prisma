@@ -67,6 +67,11 @@ model Document {
   version   String   @default("v1.0")
   // Set true when an upstream document changed after this one was last touched.
   outdated  Boolean  @default(false)
+  // Manual position in the project pipeline (lower = earlier).
+  order     Int      @default(0)
+  // Manual node coordinates on the dependency graph (null = auto-layout).
+  gx        Int?
+  gy        Int?
 
   updatedById String?
   updatedBy   User?   @relation("DocumentUpdatedBy", fields: [updatedById], references: [id])
@@ -134,6 +139,18 @@ model Template {
   createdAt   DateTime @default(now())
 }
 
+// A business type and its editable "generate pipeline" definition.
+// docTypes/edges are JSON strings (SQLite has no native arrays).
+model BusinessType {
+  id        String   @id @default(cuid())
+  name      String   @unique
+  sort      Int      @default(0)
+  docTypes  String   @default("[]") // JSON: DocType[]
+  edges     String   @default("[]") // JSON: [from, to][]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
 model Activity {
   id        String   @id @default(cuid())
   projectId String?
@@ -143,6 +160,7 @@ model Activity {
   detail    String?
   createdAt DateTime @default(now())
 
-  project Project? @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  // Keep the audit trail even after a project is deleted (projectId becomes null).
+  project Project? @relation(fields: [projectId], references: [id], onDelete: SetNull)
   user    User?    @relation(fields: [userId], references: [id])
 }

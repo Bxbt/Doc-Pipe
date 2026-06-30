@@ -1,16 +1,17 @@
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
-import { BUSINESS_TYPES } from "@/lib/constants";
 import { createProject } from "@/lib/actions";
 import { getCurrentUser, canEdit } from "@/lib/auth";
+import { getBusinessTypes } from "@/lib/business-types";
 import { PageHeader } from "@/components/ui";
 
 export const dynamic = "force-dynamic";
 
 export default async function NewProjectPage() {
-  const user = await getCurrentUser();
+  const [user, businessTypes] = await Promise.all([getCurrentUser(), getBusinessTypes()]);
   const allowed = canEdit(user);
+  const BUSINESS_TYPES = businessTypes.map((b) => b.name);
 
   async function create(formData: FormData) {
     "use server";
@@ -19,6 +20,8 @@ export default async function NewProjectPage() {
       customer: String(formData.get("customer") || "").trim(),
       businessType: String(formData.get("businessType") || "Generic"),
       description: String(formData.get("description") || "").trim(),
+      startDate: String(formData.get("startDate") || ""),
+      endDate: String(formData.get("endDate") || ""),
     });
     redirect(`/projects/${id}`);
   }
@@ -66,6 +69,22 @@ export default async function NewProjectPage() {
               ))}
             </select>
           </Field>
+          <div className="grid grid-cols-2 gap-4">
+            <Field label="Start date">
+              <input
+                type="date"
+                name="startDate"
+                className="w-full rounded-lg border border-border bg-bg px-3 py-2 text-sm outline-none focus:border-brand"
+              />
+            </Field>
+            <Field label="End date">
+              <input
+                type="date"
+                name="endDate"
+                className="w-full rounded-lg border border-border bg-bg px-3 py-2 text-sm outline-none focus:border-brand"
+              />
+            </Field>
+          </div>
           <Field label="Description">
             <textarea
               name="description"

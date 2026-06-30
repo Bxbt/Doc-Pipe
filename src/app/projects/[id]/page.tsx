@@ -7,6 +7,7 @@ import { ProjectWorkspace } from "@/components/ProjectWorkspace";
 import { StatusBadge } from "@/components/badges";
 import { formatDate } from "@/lib/utils";
 import { getCurrentUser, canEdit, canAdmin } from "@/lib/auth";
+import { getBusinessTypes } from "@/lib/business-types";
 
 export const dynamic = "force-dynamic";
 
@@ -20,7 +21,11 @@ const TRACE_COLUMNS: { type: string; label: string }[] = [
 ];
 
 export default async function ProjectPage({ params }: { params: { id: string } }) {
-  const [data, user] = await Promise.all([getProjectFull(params.id), getCurrentUser()]);
+  const [data, user, businessTypes] = await Promise.all([
+    getProjectFull(params.id),
+    getCurrentUser(),
+    getBusinessTypes(),
+  ]);
   if (!data) notFound();
   const { project, edges } = data;
   const docs = project.documents;
@@ -35,6 +40,8 @@ export default async function ProjectPage({ params }: { params: { id: string } }
     type: d.type,
     status: d.status,
     outdated: d.outdated,
+    gx: d.gx,
+    gy: d.gy,
   }));
 
   const documentsLite = docs.map((d) => ({
@@ -115,8 +122,11 @@ export default async function ProjectPage({ params }: { params: { id: string } }
           businessType: project.businessType,
           description: project.description,
           status: project.status,
+          startDate: project.startDate ? project.startDate.toISOString().slice(0, 10) : "",
+          endDate: project.endDate ? project.endDate.toISOString().slice(0, 10) : "",
         }}
         perms={perms}
+        businessTypeNames={businessTypes.map((b) => b.name)}
         documents={documentsLite}
         nodes={nodes}
         edges={edges}

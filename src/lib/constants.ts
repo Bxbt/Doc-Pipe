@@ -77,6 +77,28 @@ export const BUSINESS_TYPES = [
   "Internal Tool",
 ] as const;
 
+// The canonical full pipeline (source --> target = target depends on source).
+// Single source of truth used by scaffolding and business-type defaults.
+export const STANDARD_PIPELINE_EDGES: [DocType, DocType][] = [
+  ["BUSINESS_REQUIREMENT", "FUNCTIONAL_REQUIREMENT"],
+  ["BUSINESS_REQUIREMENT", "SRS"],
+  ["BUSINESS_REQUIREMENT", "UAT"],
+  ["FUNCTIONAL_REQUIREMENT", "SRS"],
+  ["FUNCTIONAL_REQUIREMENT", "USER_STORY"],
+  ["SRS", "FLOW_DIAGRAM"],
+  ["SRS", "USER_STORY"],
+  ["SRS", "DATABASE_DESIGN"],
+  ["SRS", "API_SPEC"],
+  ["FLOW_DIAGRAM", "USER_STORY"],
+  ["USER_STORY", "API_SPEC"],
+  ["USER_STORY", "TEST_CASE"],
+  ["DATABASE_DESIGN", "API_SPEC"],
+  ["API_SPEC", "TEST_CASE"],
+  ["TEST_CASE", "UAT"],
+  ["UAT", "DEPLOYMENT_CHECKLIST"],
+  ["DEPLOYMENT_CHECKLIST", "RELEASE_NOTE"],
+];
+
 export const SMART_CHECKLIST: Record<string, { label: string; type?: DocType }[]> = {
   Generic: [
     { label: "Business Requirement", type: "BUSINESS_REQUIREMENT" },

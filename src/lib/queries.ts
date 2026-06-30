@@ -105,11 +105,16 @@ export async function getProjectFull(projectId: string) {
   });
   if (!project) return null;
 
-  // Order documents by their pipeline stage for stable display.
+  // Order documents by their manual pipeline position, falling back to the
+  // canonical stage order, then creation time.
   const stageOrder = new Map(DOC_TYPES.map((d, i) => [d.type, i]));
-  project.documents.sort(
-    (a, b) => (stageOrder.get(a.type as DocType) ?? 99) - (stageOrder.get(b.type as DocType) ?? 99)
-  );
+  project.documents.sort((a, b) => {
+    if (a.order !== b.order) return a.order - b.order;
+    const sa = stageOrder.get(a.type as DocType) ?? 99;
+    const sb = stageOrder.get(b.type as DocType) ?? 99;
+    if (sa !== sb) return sa - sb;
+    return a.createdAt.getTime() - b.createdAt.getTime();
+  });
 
   const edges: Edge[] = project.dependencies.map((d) => ({
     sourceId: d.sourceId,

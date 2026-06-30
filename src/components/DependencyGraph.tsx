@@ -5,8 +5,8 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { Zap, ExternalLink, X } from "lucide-react";
 import { DOC_TYPE_MAP, docShort, docLabel } from "@/lib/constants";
-import { downstreamOf, type Edge } from "@/lib/graph";
-import { markChanged } from "@/lib/actions";
+import { downstreamOf, directDependencies, directDependents, type Edge } from "@/lib/graph";
+import { markChanged, addDependency, removeDependency } from "@/lib/actions";
 
 export type GraphNode = {
   id: string;
@@ -33,18 +33,26 @@ export function DependencyGraph({
   projectId,
   nodes,
   edges,
+  canEdit = false,
 }: {
   projectId: string;
   nodes: GraphNode[];
   edges: Edge[];
+  canEdit?: boolean;
 }) {
   const router = useRouter();
   const [selected, setSelected] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
   const [flash, setFlash] = useState<string | null>(null);
+  const [linkErr, setLinkErr] = useState<string | null>(null);
 
+  const labelOf = (id: string) => {
+    const n = nodes.find((x) => x.id === id);
+    return n ? docLabel(n.type) : id;
+  };
+
+  // Auto-layout: columns by pipeline stage, stacked within a column.
   const layout = useMemo(() => {
-    // Map present stages to compact column indices.
     const stages = Array.from(
       new Set(nodes.map((n) => DOC_TYPE_MAP[n.type]?.stage ?? 0))
     ).sort((a, b) => a - b);
@@ -84,6 +92,25 @@ export function DependencyGraph({
       setFlash(`${res.impacted} document(s) marked outdated`);
       router.refresh();
       setTimeout(() => setFlash(null), 4000);
+    });
+  }
+
+  function link(sourceId: string, targetId: string) {
+    setLinkErr(null);
+    startTransition(async () => {
+      try {
+        await addDependency(projectId, sourceId, targetId);
+        router.refresh();
+      } catch (e) {
+        setLinkErr(e instanceof Error ? e.message : "Failed to link");
+      }
+    });
+  }
+
+  function unlink(sourceId: string, targetId: string) {
+    startTransition(async () => {
+      await removeDependency(projectId, sourceId, targetId);
+      router.refresh();
     });
   }
 
@@ -218,6 +245,86 @@ export function DependencyGraph({
             <X size={15} />
           </button>
         </div>
+      )}
+
+      {/* edit links panel */}
+      {canEdit && selectedNode && (
+        <div className="mt-3 grid gap-3 rounded-xl border border-border bg-surface p-4 sm:grid-cols-2">
+          <LinkEditor
+            title="Depends on"
+            current={directDependencies(selectedNode.id, edges)}
+            options={nodes.filter((n) => n.id !== selectedNode.id).map((n) => n.id)}
+            currentSet={new Set(directDependencies(selectedNode.id, edges))}
+            labelOf={labelOf}
+            disabled={isPending}
+            onAdd={(otherId) => link(otherId, selectedNode.id)}
+            onRemove={(otherId) => unlink(otherId, selectedNode.id)}
+          />
+          <LinkEditor
+            title="Impacts"
+            current={directDependents(selectedNode.id, edges)}
+            options={nodes.filter((n) => n.id !== selectedNode.id).map((n) => n.id)}
+            currentSet={new Set(directDependents(selectedNode.id, edges))}
+            labelOf={labelOf}
+            disabled={isPending}
+            onAdd={(otherId) => link(selectedNode.id, otherId)}
+            onRemove={(otherId) => unlink(selectedNode.id, otherId)}
+          />
+          {linkErr && <p className="text-xs text-red-400 sm:col-span-2">{linkErr}</p>}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function LinkEditor({
+  title,
+  current,
+  options,
+  currentSet,
+  labelOf,
+  disabled,
+  onAdd,
+  onRemove,
+}: {
+  title: string;
+  current: string[];
+  options: string[];
+  currentSet: Set<string>;
+  labelOf: (id: string) => string;
+  disabled: boolean;
+  onAdd: (id: string) => void;
+  onRemove: (id: string) => void;
+}) {
+  const addable = options.filter((id) => !currentSet.has(id));
+  return (
+    <div>
+      <div className="mb-2 text-xs font-semibold text-muted">{title}</div>
+      <div className="mb-2 flex flex-col gap-1.5">
+        {current.length === 0 && <span className="text-[11px] text-muted">None</span>}
+        {current.map((id) => (
+          <div key={id} className="flex items-center justify-between gap-2 rounded-lg border border-border bg-surface-2 px-2.5 py-1.5 text-xs">
+            <span className="truncate">{labelOf(id)}</span>
+            <button onClick={() => onRemove(id)} disabled={disabled} className="text-muted hover:text-red-400 disabled:opacity-50">
+              <X size={13} />
+            </button>
+          </div>
+        ))}
+      </div>
+      {addable.length > 0 && (
+        <select
+          value=""
+          disabled={disabled}
+          onChange={(e) => e.target.value && onAdd(e.target.value)}
+          className="w-full rounded-lg border border-border bg-bg px-2 py-1.5 text-xs outline-none focus:border-brand"
+        >
+          <option value="">+ add…</option>
+          {addable.map((id) => (
+            <option key={id} value={id}>
+              {labelOf(id)}
+            </option>
+          ))}
+        </select>
       )}
     </div>
   );

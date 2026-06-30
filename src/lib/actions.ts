@@ -4,8 +4,9 @@ import { revalidatePath } from "next/cache";
 import { prisma } from "./db";
 import { getCurrentUser, canEdit, canReview, canAdmin } from "./auth";
 import { downstreamOf, type Edge } from "./graph";
-import { DOC_TYPES, docLabel, type DocType } from "./constants";
+import { docLabel } from "./constants";
 import { TEMPLATES } from "./templates";
+import { getBusinessTypePipeline } from "./business-types";
 
 // Starter content for a new document — prefers the (editable) DB template
 // matching the document type's label, falling back to the built-in template.
@@ -16,28 +17,6 @@ async function starterContentFor(type: string): Promise<string> {
   const builtin = TEMPLATES.find((x) => x.name === label);
   return builtin ? builtin.content : `# ${label}\n\n_Start writing…_`;
 }
-
-// The canonical pipeline used by "Generate standard pipeline".
-// target depends on source (source --> target).
-const STANDARD_EDGES: [DocType, DocType][] = [
-  ["BUSINESS_REQUIREMENT", "FUNCTIONAL_REQUIREMENT"],
-  ["BUSINESS_REQUIREMENT", "SRS"],
-  ["BUSINESS_REQUIREMENT", "UAT"],
-  ["FUNCTIONAL_REQUIREMENT", "SRS"],
-  ["FUNCTIONAL_REQUIREMENT", "USER_STORY"],
-  ["SRS", "FLOW_DIAGRAM"],
-  ["SRS", "USER_STORY"],
-  ["SRS", "DATABASE_DESIGN"],
-  ["SRS", "API_SPEC"],
-  ["FLOW_DIAGRAM", "USER_STORY"],
-  ["USER_STORY", "API_SPEC"],
-  ["USER_STORY", "TEST_CASE"],
-  ["DATABASE_DESIGN", "API_SPEC"],
-  ["API_SPEC", "TEST_CASE"],
-  ["TEST_CASE", "UAT"],
-  ["UAT", "DEPLOYMENT_CHECKLIST"],
-  ["DEPLOYMENT_CHECKLIST", "RELEASE_NOTE"],
-];
 
 function bumpMinor(version: string): string {
   const m = version.match(/^v?(\d+)\.(\d+)$/);
@@ -133,11 +112,20 @@ export async function saveDocument(projectId: string, documentId: string, conten
   revalidatePath(`/projects/${projectId}`);
 }
 
+// Parse a "YYYY-MM-DD" string into a Date, or null when empty/invalid.
+function toDate(s?: string | null): Date | null {
+  if (!s) return null;
+  const d = new Date(s);
+  return isNaN(d.getTime()) ? null : d;
+}
+
 export async function createProject(input: {
   name: string;
   customer?: string;
   businessType: string;
   description?: string;
+  startDate?: string;
+  endDate?: string;
 }) {
   const user = await getCurrentUser();
   if (!canEdit(user)) throw new Error("You need Editor access to create projects.");
@@ -149,6 +137,8 @@ export async function createProject(input: {
       businessType: input.businessType,
       description: input.description || null,
       status: "Active",
+      startDate: toDate(input.startDate),
+      endDate: toDate(input.endDate),
       members: { create: { userId: user.id } },
     },
   });
@@ -170,7 +160,15 @@ export async function setUserRole(userId: string, role: string) {
 
 export async function updateProject(
   projectId: string,
-  input: { name?: string; customer?: string; businessType?: string; description?: string; status?: string }
+  input: {
+    name?: string;
+    customer?: string;
+    businessType?: string;
+    description?: string;
+    status?: string;
+    startDate?: string;
+    endDate?: string;
+  }
 ) {
   const user = await getCurrentUser();
   if (!canEdit(user)) throw new Error("You need Editor access to edit a project.");
@@ -183,6 +181,8 @@ export async function updateProject(
       ...(input.businessType !== undefined ? { businessType: input.businessType } : {}),
       ...(input.description !== undefined ? { description: input.description || null } : {}),
       ...(input.status !== undefined ? { status: input.status } : {}),
+      ...(input.startDate !== undefined ? { startDate: toDate(input.startDate) } : {}),
+      ...(input.endDate !== undefined ? { endDate: toDate(input.endDate) } : {}),
     },
   });
   await prisma.activity.create({
@@ -207,6 +207,12 @@ export async function addDocument(projectId: string, type: string, title?: strin
   const user = await getCurrentUser();
   if (!canEdit(user)) throw new Error("You need Editor access to add documents.");
 
+  const last = await prisma.document.findFirst({
+    where: { projectId },
+    orderBy: { order: "desc" },
+    select: { order: true },
+  });
+
   const doc = await prisma.document.create({
     data: {
       projectId,
@@ -215,6 +221,7 @@ export async function addDocument(projectId: string, type: string, title?: strin
       status: "Draft",
       content: await starterContentFor(type),
       version: "v1.0",
+      order: (last?.order ?? -1) + 1,
       updatedById: user.id,
     },
   });
@@ -274,18 +281,29 @@ export async function removeDependency(projectId: string, sourceId: string, targ
   revalidatePath(`/projects/${projectId}/documents/${targetId}`);
 }
 
-// One-click: create any missing standard documents and wire the standard pipeline.
+// One-click: create missing documents and wire dependencies, using the
+// pipeline defined for the project's business type.
 export async function scaffoldPipeline(projectId: string) {
   const user = await getCurrentUser();
   if (!canEdit(user)) throw new Error("You need Editor access.");
 
+  const project = await prisma.project.findUnique({ where: { id: projectId } });
+  if (!project) throw new Error("Project not found.");
+
+  const { docTypes, edges } = await getBusinessTypePipeline(project.businessType);
+
   const existing = await prisma.document.findMany({ where: { projectId } });
   const idByType: Record<string, string> = {};
-  for (const d of existing) idByType[d.type] = d.id;
+  let maxOrder = -1;
+  for (const d of existing) {
+    idByType[d.type] = d.id;
+    if (d.order > maxOrder) maxOrder = d.order;
+  }
 
-  // Create missing standard document types.
-  for (const { type } of DOC_TYPES) {
+  // Create missing document types in pipeline order.
+  for (const type of docTypes) {
     if (idByType[type]) continue;
+    maxOrder += 1;
     const doc = await prisma.document.create({
       data: {
         projectId,
@@ -294,6 +312,7 @@ export async function scaffoldPipeline(projectId: string) {
         status: "Draft",
         content: await starterContentFor(type),
         version: "v1.0",
+        order: maxOrder,
         updatedById: user.id,
       },
     });
@@ -303,8 +322,8 @@ export async function scaffoldPipeline(projectId: string) {
     });
   }
 
-  // Wire standard dependencies (skip any that already exist).
-  for (const [from, to] of STANDARD_EDGES) {
+  // Wire dependencies (skip any that already exist).
+  for (const [from, to] of edges) {
     const sourceId = idByType[from];
     const targetId = idByType[to];
     if (!sourceId || !targetId) continue;
@@ -316,9 +335,78 @@ export async function scaffoldPipeline(projectId: string) {
   }
 
   await prisma.activity.create({
-    data: { projectId, userId: user.id, action: "scaffolded_pipeline", detail: "Generated standard pipeline" },
+    data: {
+      projectId,
+      userId: user.id,
+      action: "scaffolded_pipeline",
+      detail: `Generated ${project.businessType} pipeline`,
+    },
   });
   revalidatePath(`/projects/${projectId}`);
+}
+
+// Move a document up/down in the manual pipeline order (swaps with its neighbour).
+export async function reorderDocument(projectId: string, documentId: string, direction: "up" | "down") {
+  const user = await getCurrentUser();
+  if (!canEdit(user)) throw new Error("You need Editor access to reorder documents.");
+
+  const docs = await prisma.document.findMany({
+    where: { projectId },
+    orderBy: [{ order: "asc" }, { createdAt: "asc" }],
+  });
+  const idx = docs.findIndex((d) => d.id === documentId);
+  if (idx === -1) return;
+  const swapWith = direction === "up" ? idx - 1 : idx + 1;
+  if (swapWith < 0 || swapWith >= docs.length) return;
+
+  // Normalise to sequential order, then swap the two positions.
+  const ordered = docs.map((d) => d.id);
+  [ordered[idx], ordered[swapWith]] = [ordered[swapWith], ordered[idx]];
+  await prisma.$transaction(
+    ordered.map((id, i) => prisma.document.update({ where: { id }, data: { order: i } }))
+  );
+  revalidatePath(`/projects/${projectId}`);
+}
+
+// ---- Business type management (editable generate-pipeline per type) ----
+
+export async function createBusinessType(input: { name: string; docTypes: string[]; edges: [string, string][] }) {
+  const user = await getCurrentUser();
+  if (!canEdit(user)) throw new Error("You need Editor access to manage business types.");
+  const t = await prisma.businessType.create({
+    data: {
+      name: input.name.trim(),
+      sort: 999,
+      docTypes: JSON.stringify(input.docTypes ?? []),
+      edges: JSON.stringify(input.edges ?? []),
+    },
+  });
+  revalidatePath("/business-types");
+  return t.id;
+}
+
+export async function updateBusinessType(
+  id: string,
+  input: { name?: string; docTypes?: string[]; edges?: [string, string][] }
+) {
+  const user = await getCurrentUser();
+  if (!canEdit(user)) throw new Error("You need Editor access to edit business types.");
+  await prisma.businessType.update({
+    where: { id },
+    data: {
+      ...(input.name !== undefined ? { name: input.name.trim() } : {}),
+      ...(input.docTypes !== undefined ? { docTypes: JSON.stringify(input.docTypes) } : {}),
+      ...(input.edges !== undefined ? { edges: JSON.stringify(input.edges) } : {}),
+    },
+  });
+  revalidatePath("/business-types");
+}
+
+export async function deleteBusinessType(id: string) {
+  const user = await getCurrentUser();
+  if (!canEdit(user)) throw new Error("You need Editor access to delete business types.");
+  await prisma.businessType.delete({ where: { id } });
+  revalidatePath("/business-types");
 }
 
 export async function createTemplate(input: { name: string; description?: string; content?: string }) {

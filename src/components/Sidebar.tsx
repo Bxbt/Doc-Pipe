@@ -8,6 +8,7 @@ import {
   GitBranch,
   FileText,
   Users,
+  Boxes,
   PanelLeftClose,
   PanelLeftOpen,
   X,
@@ -18,6 +19,7 @@ const nav = [
   { href: "/", label: "Dashboard", icon: LayoutDashboard },
   { href: "/projects", label: "Projects", icon: FolderKanban },
   { href: "/templates", label: "Templates", icon: FileText },
+  { href: "/business-types", label: "Business Types", icon: Boxes },
   { href: "/team", label: "Team", icon: Users },
 ];
 

@@ -5,6 +5,8 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
   ArrowDown,
+  ChevronUp,
+  ChevronDown,
   FileText,
   AlertTriangle,
   Check,
@@ -16,7 +18,7 @@ import {
 import { DependencyGraph, type GraphNode } from "./DependencyGraph";
 import { StatusBadge } from "./badges";
 import { ProgressBar } from "./ui";
-import { docLabel, docShort, DOC_TYPES, BUSINESS_TYPES } from "@/lib/constants";
+import { docLabel, docShort, DOC_TYPES } from "@/lib/constants";
 import { timeAgo, cn } from "@/lib/utils";
 import type { Edge } from "@/lib/graph";
 import {
@@ -25,6 +27,7 @@ import {
   scaffoldPipeline,
   updateProject,
   deleteProject,
+  reorderDocument,
 } from "@/lib/actions";
 
 type DocLite = {
@@ -53,8 +56,11 @@ type Props = {
     businessType: string;
     description: string | null;
     status: string;
+    startDate: string;
+    endDate: string;
   };
   perms: { canEdit: boolean; canAdmin: boolean };
+  businessTypeNames: string[];
   documents: DocLite[];
   nodes: GraphNode[];
   edges: Edge[];
@@ -91,7 +97,12 @@ export function ProjectWorkspace(props: Props) {
 
       {tab === "Pipeline" && <Pipeline {...props} />}
       {tab === "Dependency Graph" && (
-        <DependencyGraph projectId={props.projectId} nodes={props.nodes} edges={props.edges} />
+        <DependencyGraph
+          projectId={props.projectId}
+          nodes={props.nodes}
+          edges={props.edges}
+          canEdit={props.perms.canEdit}
+        />
       )}
       {tab === "Traceability" && <Traceability {...props} />}
       {tab === "Health" && <Health {...props} />}
@@ -219,6 +230,36 @@ function Pipeline({ projectId, documents, perms }: Props) {
               </span>
             )}
             <StatusBadge status={d.outdated ? "Outdated" : d.status} />
+            {perms.canEdit && (
+              <div className="flex flex-col">
+                <button
+                  title="Move up"
+                  disabled={i === 0 || isPending}
+                  onClick={() =>
+                    startTransition(async () => {
+                      await reorderDocument(projectId, d.id, "up");
+                      router.refresh();
+                    })
+                  }
+                  className="flex h-4 w-6 items-center justify-center rounded text-muted hover:text-fg disabled:opacity-30"
+                >
+                  <ChevronUp size={14} />
+                </button>
+                <button
+                  title="Move down"
+                  disabled={i === documents.length - 1 || isPending}
+                  onClick={() =>
+                    startTransition(async () => {
+                      await reorderDocument(projectId, d.id, "down");
+                      router.refresh();
+                    })
+                  }
+                  className="flex h-4 w-6 items-center justify-center rounded text-muted hover:text-fg disabled:opacity-30"
+                >
+                  <ChevronDown size={14} />
+                </button>
+              </div>
+            )}
             {perms.canEdit && (
               <button
                 title="Delete document"
@@ -365,7 +406,7 @@ function Checklist({ missing }: Props) {
   );
 }
 
-function Settings({ projectId, project, perms }: Props) {
+function Settings({ projectId, project, perms, businessTypeNames }: Props) {
   const router = useRouter();
   const [form, setForm] = useState({
     name: project.name,
@@ -373,6 +414,8 @@ function Settings({ projectId, project, perms }: Props) {
     businessType: project.businessType,
     description: project.description ?? "",
     status: project.status,
+    startDate: project.startDate,
+    endDate: project.endDate,
   });
   const [isPending, startTransition] = useTransition();
   const [saved, setSaved] = useState(false);
@@ -407,7 +450,7 @@ function Settings({ projectId, project, perms }: Props) {
         <div className="grid grid-cols-2 gap-4">
           <L label="Business type">
             <select value={form.businessType} onChange={(e) => setForm({ ...form, businessType: e.target.value })} className={inputCls}>
-              {BUSINESS_TYPES.map((t) => (
+              {Array.from(new Set([form.businessType, ...businessTypeNames])).filter(Boolean).map((t) => (
                 <option key={t} value={t}>{t}</option>
               ))}
             </select>
@@ -418,6 +461,14 @@ function Settings({ projectId, project, perms }: Props) {
                 <option key={s} value={s}>{s}</option>
               ))}
             </select>
+          </L>
+        </div>
+        <div className="grid grid-cols-2 gap-4">
+          <L label="Start date">
+            <input type="date" value={form.startDate} onChange={(e) => setForm({ ...form, startDate: e.target.value })} className={inputCls} />
+          </L>
+          <L label="End date">
+            <input type="date" value={form.endDate} onChange={(e) => setForm({ ...form, endDate: e.target.value })} className={inputCls} />
           </L>
         </div>
         <L label="Description">
