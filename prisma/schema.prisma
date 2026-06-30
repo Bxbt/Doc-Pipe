@@ -24,6 +24,7 @@ model User {
   comments        Comment[]
   activities      Activity[]
   versions        DocumentVersion[]
+  attachments     Attachment[]
 }
 
 model Project {
@@ -87,6 +88,23 @@ model Document {
 
   comments Comment[]
   versions DocumentVersion[]
+  attachments Attachment[]
+}
+
+// Files attached to a document. Binary lives on disk (see src/lib/storage.ts);
+// only metadata is stored here.
+model Attachment {
+  id           String   @id @default(cuid())
+  documentId   String
+  filename     String
+  mime         String
+  size         Int
+  storedName   String
+  uploadedById String?
+  createdAt    DateTime @default(now())
+
+  document   Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  uploadedBy User?    @relation(fields: [uploadedById], references: [id])
 }
 
 // Directed edge: `target` depends on `source`.

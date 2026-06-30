@@ -12,3 +12,7 @@ prisma/dev.db*
 
 # TS build cache
 tsconfig.tsbuildinfo
+
+# Uploaded attachments (local dev)
+uploads/
+prisma/uploads/

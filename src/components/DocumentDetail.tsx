@@ -17,6 +17,7 @@ import {
   ArrowDownRight,
 } from "lucide-react";
 import { Markdown } from "./Markdown";
+import { AttachmentPanel } from "./AttachmentPanel";
 import { StatusBadge } from "./badges";
 import { docLabel, docShort } from "@/lib/constants";
 import { cn } from "@/lib/utils";
@@ -51,6 +52,7 @@ export function DocumentDetail({
   upstream,
   downstream,
   allDocs,
+  attachments,
   perms,
 }: {
   projectId: string;
@@ -58,6 +60,7 @@ export function DocumentDetail({
   upstream: RelDoc[];
   downstream: RelDoc[];
   allDocs: PickDoc[];
+  attachments: { id: string; filename: string; mime: string; size: number }[];
   perms: { canEdit: boolean; canReview: boolean };
 }) {
   const router = useRouter();
@@ -242,6 +245,7 @@ export function DocumentDetail({
             canEdit={perms.canEdit}
             empty="No downstream documents"
           />
+          <AttachmentPanel docId={doc.id} attachments={attachments} canEdit={perms.canEdit} />
         </div>
       </div>
     </div>

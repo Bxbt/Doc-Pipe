@@ -18,7 +18,10 @@ export default async function DocumentPage({
     getCurrentUser(),
     prisma.document.findUnique({
       where: { id: params.docId },
-      include: { updatedBy: { select: { name: true } } },
+      include: {
+        updatedBy: { select: { name: true } },
+        attachments: { orderBy: { createdAt: "asc" } },
+      },
     }),
     prisma.project.findUnique({
       where: { id: params.id },
@@ -74,6 +77,12 @@ export default async function DocumentPage({
         upstream={upstream}
         downstream={downstream}
         allDocs={allDocs}
+        attachments={doc.attachments.map((a) => ({
+          id: a.id,
+          filename: a.filename,
+          mime: a.mime,
+          size: a.size,
+        }))}
         perms={{ canEdit: canEdit(user), canReview: canReview(user) }}
       />
     </div>

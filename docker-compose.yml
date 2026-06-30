@@ -7,6 +7,8 @@ services:
     environment:
       # SQLite file lives on the mounted volume so data survives restarts.
       - DATABASE_URL=file:/data/app.db
+      # Uploaded attachments live on the same volume.
+      - UPLOAD_DIR=/data/uploads
       # Bootstrap admins — always treated as Admin regardless of stored role.
       - ADMIN_EMAILS=${ADMIN_EMAILS:-na.thanabodee@gmail.com}
       # Seed the demo project once, only if the database is empty.

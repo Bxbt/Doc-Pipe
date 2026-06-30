@@ -7,6 +7,8 @@ import { downstreamOf, type Edge } from "./graph";
 import { docLabel } from "./constants";
 import { TEMPLATES } from "./templates";
 import { getBusinessTypePipeline } from "./business-types";
+import { unlink } from "node:fs/promises";
+import { storedPath } from "./storage";
 
 // Starter content for a new document — prefers the (editable) DB template
 // matching the document type's label, falling back to the built-in template.
@@ -234,6 +236,28 @@ export async function addDocument(projectId: string, type: string, title?: strin
 
   revalidatePath(`/projects/${projectId}`);
   return doc.id;
+}
+
+export async function deleteAttachment(attachmentId: string) {
+  const user = await getCurrentUser();
+  if (!canEdit(user)) throw new Error("You need Editor access to delete attachments.");
+
+  const att = await prisma.attachment.findUnique({
+    where: { id: attachmentId },
+    include: { document: { select: { projectId: true } } },
+  });
+  if (!att) return;
+
+  await prisma.attachment.delete({ where: { id: attachmentId } });
+  try {
+    await unlink(storedPath(att.storedName));
+  } catch {
+    // file already gone — ignore
+  }
+  await prisma.activity.create({
+    data: { projectId: att.document.projectId, userId: user.id, action: "deleted_attachment", detail: att.filename },
+  });
+  revalidatePath(`/projects/${att.document.projectId}/documents/${att.documentId}`);
 }
 
 export async function deleteDocument(projectId: string, documentId: string) {

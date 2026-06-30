@@ -94,11 +94,12 @@ Visit **https://pipeline.bboybezz.xyz** → Cloudflare Access login → you're i
 > x86 for an ARM target, use `docker buildx build --platform linux/arm64`.
 
 ### 4. Backups
-SQLite lives in the `pipeline-data` volume at `/data/app.db`. Back it up with:
+The `pipeline-data` volume holds both the SQLite DB (`/data/app.db`) and uploaded
+attachments (`/data/uploads`). Back up the whole volume:
 
 ```bash
 docker run --rm -v pipeline-data:/data -v "$PWD":/backup alpine \
-  cp /data/app.db /backup/app-$(date +%F).db
+  tar czf /backup/doc-pipe-$(date +%F).tar.gz -C /data .
 ```
 
 ---
