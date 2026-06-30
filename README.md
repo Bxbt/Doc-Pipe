@@ -4,8 +4,6 @@ Connect every project document into one **living pipeline**. Change a requiremen
 instantly see which downstream documents (SRS → User Story → API → Test Case → UAT → Release)
 go out of date. No more drifting docs.
 
-Live: **https://doc-pipe.bboybezz.xyz**
-
 > Built end-to-end **by prompting AI only** — no code written by hand — for a Friday Sharing.
 > The application itself contains **no AI at runtime**; every "smart" feature (impact analysis,
 > traceability, project health, smart checklist) is deterministic logic over a single
@@ -90,12 +88,12 @@ and existing data is never overwritten).
 
 ### 1. Create a Cloudflare Tunnel
 1. Cloudflare dashboard → **Zero Trust → Networks → Tunnels → Create a tunnel** (type *Cloudflared*).
-2. Add a **Public Hostname**: `doc-pipe.bboybezz.xyz` → Service `HTTP` → `http://app:3000`.
+2. Add a **Public Hostname**: `<your-domain>` → Service `HTTP` → `http://app:3000`.
 3. Copy the **tunnel token**.
 
 ### 2. Gate it with Cloudflare Access (this is your login)
 1. Zero Trust → **Access → Applications → Add an application** (Self-hosted).
-2. Application domain: `doc-pipe.bboybezz.xyz`.
+2. Application domain: `<your-domain>`.
 3. Add a policy → Action **Allow** → Include **Emails** = your team's emails. Use Google login.
 
 ### 3. Deploy the stack in Portainer
@@ -103,7 +101,7 @@ Deploy `docker-compose.yml` (App from **Repository** `Bxbt/Doc-Pipe`, or paste t
 with environment variables:
 
 - `TUNNEL_TOKEN` = the tunnel token from step 1
-- `ADMIN_EMAILS` = `na.thanabodee@gmail.com` (comma-separated for more)
+- `ADMIN_EMAILS` = your admin email(s), comma-separated
 - `SEED_ON_EMPTY` = `true`
 
 Portainer builds the arm64 image and starts `app` + `cloudflared`.
@@ -111,10 +109,10 @@ Portainer builds the arm64 image and starts `app` + `cloudflared`.
 **Redeploy after a push** (pulls the latest commit + rebuilds) via the Portainer API:
 
 ```bash
-curl -sk -X PUT "https://152.69.208.12:9443/api/stacks/19/git/redeploy?endpointId=3" \
+curl -sk -X PUT "https://<portainer-host>/api/stacks/<stack-id>/git/redeploy?endpointId=<endpoint-id>" \
   -H "X-API-Key: <portainer-token>" -H "Content-Type: application/json" \
   -d '{"RepositoryReferenceName":"refs/heads/main","Env":[
-        {"name":"ADMIN_EMAILS","value":"na.thanabodee@gmail.com"},
+        {"name":"ADMIN_EMAILS","value":"<admin-email>"},
         {"name":"SEED_ON_EMPTY","value":"true"},
         {"name":"TUNNEL_TOKEN","value":"<tunnel-token>"}]}'
 ```

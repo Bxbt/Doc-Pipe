@@ -252,11 +252,11 @@ async function main() {
   console.log("Seeding users…");
   const users = await Promise.all(
     [
-      { email: "na.thanabodee@gmail.com", name: "Thanabodee (Owner)", role: "Admin" },
-      { email: "admin@bboybezz.xyz", name: "Admin", role: "Admin" },
-      { email: "ba@bboybezz.xyz", name: "Bee (BA / Editor)", role: "Editor" },
-      { email: "reviewer@bboybezz.xyz", name: "Rin (Reviewer)", role: "Reviewer" },
-      { email: "viewer@bboybezz.xyz", name: "View (Viewer)", role: "Viewer" },
+      { email: "owner@example.com", name: "Owner", role: "Admin" },
+      { email: "admin@example.com", name: "Admin", role: "Admin" },
+      { email: "ba@example.com", name: "Bee (BA / Editor)", role: "Editor" },
+      { email: "reviewer@example.com", name: "Rin (Reviewer)", role: "Reviewer" },
+      { email: "viewer@example.com", name: "View (Viewer)", role: "Viewer" },
     ].map((u) => prisma.user.create({ data: u }))
   );
   const editor = users.find((u) => u.role === "Editor")!;
