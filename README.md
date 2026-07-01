@@ -143,7 +143,9 @@ docker run --rm -v pipeline-data:/data -v "$PWD":/backup alpine \
 prisma/
   schema.prisma          # User, Project, Document, DocumentDependency, Template,
                          #   BusinessType, Attachment, DocumentVersion, Comment, Activity
-  seed.ts                # demo project "Meeting Room Booking System"
+  demo-content.ts        # demo project content — Doc-Pipe documenting itself
+  seed.ts                # fresh-install seed (users + demo project)
+  replace-meeting.ts     # idempotent migration: swap old mock demo for Doc-Pipe
   seed-if-empty.ts       # one-time seed guarded by a /data/.seeded marker
 src/
   app/
