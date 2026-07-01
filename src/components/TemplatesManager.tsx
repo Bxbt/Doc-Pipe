@@ -134,7 +134,10 @@ export function TemplatesManager({ templates, canEdit }: { templates: T[]; canEd
                 <X size={16} />
               </button>
             </div>
-            <div className="flex flex-col gap-3 overflow-y-auto p-5">
+            {/* No overflow clip here: the editor scrolls internally instead, so
+                BlockNote's slash/+ menu (position:absolute) isn't clipped and can
+                flip up near the bottom of the screen. */}
+            <div className="flex min-h-0 flex-col gap-3 p-5">
               <label className="flex flex-col gap-1.5">
                 <span className="text-xs font-medium text-muted">Name</span>
                 <input
@@ -151,9 +154,9 @@ export function TemplatesManager({ templates, canEdit }: { templates: T[]; canEd
                   className="rounded-lg border border-border bg-bg px-3 py-2 text-sm outline-none focus:border-brand"
                 />
               </label>
-              <div className="flex flex-col gap-1.5">
+              <div className="flex min-h-0 flex-col gap-1.5">
                 <span className="text-xs font-medium text-muted">Content</span>
-                <div className="rounded-lg border border-border bg-bg px-3 py-2">
+                <div className="bn-modal-editor rounded-lg border border-border bg-bg px-3 py-2">
                   <BlockEditor
                     initialMarkdown={draft.content}
                     onChange={(md) => setDraft((d) => (d ? { ...d, content: md } : d))}

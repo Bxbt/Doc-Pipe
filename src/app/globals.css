@@ -123,3 +123,12 @@ body {
 .bn-wrap[data-ready="false"] {
   opacity: 0.4;
 }
+
+/* Document Library modal: scroll the editor content internally so the modal
+   body doesn't need overflow — otherwise it clips BlockNote's absolutely
+   positioned slash/+ menu. The menu is a sibling of .bn-editor, so its own
+   overflow doesn't clip the menu, and it can flip up near the screen bottom. */
+.bn-modal-editor .bn-editor {
+  max-height: 46vh;
+  overflow-y: auto;
+}

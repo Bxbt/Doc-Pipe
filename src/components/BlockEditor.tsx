@@ -6,12 +6,33 @@ import { BlockNoteView } from "@blocknote/mantine";
 import "@blocknote/core/fonts/inter.css";
 import "@blocknote/mantine/style.css";
 
+// Markdown has no field for image size, so a resized image would reset on
+// reload. We round-trip BlockNote's `previewWidth` through a `#w=<px>` fragment
+// on the image URL (fragments aren't sent to the server, and it stays valid
+// markdown). See the matching <img> handling in Markdown.tsx for the view.
+/* eslint-disable @typescript-eslint/no-explicit-any */
+function applyImageWidthsFromUrl(blocks: any[]) {
+  for (const b of blocks ?? []) {
+    if (b?.type === "image" && typeof b.props?.url === "string") {
+      const m = /#w=(\d+)$/.exec(b.props.url);
+      if (m) {
+        b.props.previewWidth = Number(m[1]);
+        b.props.url = b.props.url.replace(/#w=\d+$/, "");
+      }
+    }
+    if (b?.children?.length) applyImageWidthsFromUrl(b.children);
+  }
+}
+
+/* eslint-enable @typescript-eslint/no-explicit-any */
+
 /**
- * POC rich block editor (Notion-style) built on BlockNote.
+ * Rich block editor (Notion-style) built on BlockNote.
  *
- * It loads existing **markdown** into blocks, lets the user edit visually,
- * and converts the blocks back to markdown on every change — so the rest of
- * the app keeps storing markdown (versioning, diff, search, export untouched).
+ * Content is stored as **HTML** so every formatting choice survives a save —
+ * colour, underline, text/image alignment, and image size, none of which
+ * Markdown can represent. Older documents saved as Markdown still load fine:
+ * the parser is chosen by sniffing the content on mount.
  */
 export function BlockEditor({
   docId,
@@ -63,12 +84,20 @@ export function BlockEditor({
     return () => obs.disconnect();
   }, []);
 
-  // Parse the incoming markdown into blocks once the editor exists.
+  // Parse the incoming content once the editor exists. New content is stored as
+  // HTML (lossless for colour/underline/alignment/image size); older documents
+  // are Markdown, so we detect and parse accordingly for backward compatibility.
   useEffect(() => {
     let cancelled = false;
     (async () => {
-      const blocks = await editor.tryParseMarkdownToBlocks(initialMarkdown || "");
+      const src = initialMarkdown || "";
+      const isHtml = /^\s*</.test(src);
+      const blocks = isHtml
+        ? await editor.tryParseHTMLToBlocks(src)
+        : await editor.tryParseMarkdownToBlocks(src);
       if (cancelled) return;
+      // Only legacy Markdown carried image widths in a #w= URL fragment.
+      if (!isHtml) applyImageWidthsFromUrl(blocks);
       editor.replaceBlocks(editor.document, blocks);
       loadingRef.current = false;
       setReady(true);
@@ -80,10 +109,12 @@ export function BlockEditor({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // Save as HTML so all formatting persists (Markdown can't hold colour,
+  // underline, alignment, or image size).
   async function handleChange() {
     if (loadingRef.current) return;
-    const md = await editor.blocksToMarkdownLossy(editor.document);
-    onChange(md);
+    const html = await editor.blocksToHTMLLossy(editor.document);
+    onChange(html);
   }
 
   return (

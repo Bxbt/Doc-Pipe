@@ -24,7 +24,7 @@ go out of date. No more drifting docs.
 | **Project Health** | Completion % overall and per phase (Requirement → Design → API → Testing → Release) |
 | **Business Types** | Editable per-type "generate pipeline" (which documents + dependencies get scaffolded); the document choices come from the Document Library |
 | **Smart Checklist** | Recommended documents per business type |
-| **Document Editor** | **Notion-style block editor** (BlockNote) over Markdown — headings, tables, checklists, **Mermaid diagrams**, code blocks; versioning, copy, export `.md` |
+| **Document Editor** | **Notion-style block editor** (BlockNote) — headings, tables, checklists, **Mermaid diagrams**, code blocks, plus **text colour, highlight, underline, and text/image alignment**; versioning, copy, export |
 | **Attachments** | Upload images / PDF / Word / Excel / CSV / zip (≤10 MB); inline preview for images & PDF. Browse, paste, or drag images straight into a document |
 | **Document Library** | Editable catalogue of reusable documents (create / edit / delete) edited with the same block editor; new project documents draw starter content from it, and Business Type pickers list from it |
 | **Custom inputs** | App-wide styled dropdowns and a calendar date picker (portal-based, theme-aware) |
@@ -40,7 +40,9 @@ go out of date. No more drifting docs.
 - **Tailwind CSS** (dark mode by default)
 - **Prisma** ORM + **SQLite** in **WAL mode** with indexed foreign keys — comfortably
   handles ~10–50 concurrent users (single file, zero external DB to run)
-- **BlockNote** block editor (loads/saves Markdown, so content stays plain text)
+- **BlockNote** block editor — saves content as **HTML** so rich formatting
+  (colour, underline, alignment, image size) persists; legacy Markdown documents
+  still load. The view renders HTML through `rehype-raw` + `rehype-sanitize`
 - **Mermaid** for diagrams (lazy-loaded client-side)
 - **Docker** + **Cloudflare Tunnel** + **Cloudflare Access** for production
 

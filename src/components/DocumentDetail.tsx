@@ -161,12 +161,18 @@ export function DocumentDetail({
     setTimeout(() => setCopied(false), 1500);
   }
 
+  // Content is HTML for documents saved with the current editor, Markdown for
+  // older ones — export with the matching type/extension so the file is honest.
+  const isHtml = /^\s*</.test(doc.content);
   function onExport() {
-    const blob = new Blob([doc.content], { type: "text/markdown" });
+    const ext = isHtml ? "html" : "md";
+    const blob = new Blob([doc.content], {
+      type: isHtml ? "text/html" : "text/markdown",
+    });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = `${docShort(doc.type)}-${doc.title}.md`.replace(/\s+/g, "_");
+    a.download = `${docShort(doc.type)}-${doc.title}.${ext}`.replace(/\s+/g, "_");
     a.click();
     URL.revokeObjectURL(url);
   }
@@ -287,7 +293,7 @@ export function DocumentDetail({
           onClick={onExport}
           className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-surface px-3 py-1.5 text-sm hover:bg-surface-2"
         >
-          <Download size={14} /> Export .md
+          <Download size={14} /> Export .{isHtml ? "html" : "md"}
         </button>
 
         <div className="ml-auto flex items-center gap-2">
