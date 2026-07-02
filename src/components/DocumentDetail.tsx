@@ -82,6 +82,9 @@ export function DocumentDetail({
   const router = useRouter();
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(doc.content);
+  // When true, the next save is treated as a minor edit: patch-version bump,
+  // status untouched, and downstream documents are NOT flagged Outdated.
+  const [minor, setMinor] = useState(false);
   const [isPending, startTransition] = useTransition();
   const [copied, setCopied] = useState(false);
   // Set when someone else holds the lock and we tried to edit.
@@ -114,6 +117,7 @@ export function DocumentDetail({
   function onCancel() {
     // The heartbeat effect's cleanup releases the lock when editing flips off.
     setEditing(false);
+    setMinor(false);
   }
 
   // Admin: force-clear another user's lock, then take it over.
@@ -149,8 +153,9 @@ export function DocumentDetail({
 
   function onSave() {
     startTransition(async () => {
-      await saveDocument(projectId, doc.id, draft);
+      await saveDocument(projectId, doc.id, draft, { minor });
       setEditing(false);
+      setMinor(false);
       router.refresh();
     });
   }
@@ -280,6 +285,18 @@ export function DocumentDetail({
             >
               <X size={14} /> Cancel
             </button>
+            <label
+              className="inline-flex cursor-pointer select-none items-center gap-1.5 rounded-lg border border-border bg-surface px-3 py-1.5 text-sm text-muted hover:text-fg"
+              title="Patch-version bump only; keep the status and don't flag downstream documents as Outdated"
+            >
+              <input
+                type="checkbox"
+                checked={minor}
+                onChange={(e) => setMinor(e.target.checked)}
+                className="accent-brand"
+              />
+              Minor edit
+            </label>
           </>
         )}
         <button

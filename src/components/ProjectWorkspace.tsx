@@ -21,7 +21,7 @@ import { StatusBadge } from "./badges";
 import { ProgressBar } from "./ui";
 import { Select, DatePicker } from "./inputs";
 import { useScrollLock } from "./useScrollLock";
-import { docLabel, docShort, DOC_TYPES } from "@/lib/constants";
+import { docLabel, docShort, DOC_TYPES, DOC_STATUSES } from "@/lib/constants";
 import { timeAgo, cn } from "@/lib/utils";
 import type { Edge } from "@/lib/graph";
 import {
@@ -31,7 +31,11 @@ import {
   updateProject,
   deleteProject,
   reorderDocument,
+  setStatusMany,
 } from "@/lib/actions";
+
+// "InReview" -> "In Review" for display; other statuses are already readable.
+const statusLabel = (s: string) => (s === "InReview" ? "In Review" : s);
 
 type DocLite = {
   id: string;
@@ -228,6 +232,28 @@ function ScaffoldButton({ projectId, full }: { projectId: string; full?: boolean
 function Pipeline({ projectId, documents, perms, docTypeOptions }: Props) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
+  // Multi-select: pick several documents and change their status in one action.
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [bulkStatus, setBulkStatus] = useState<string>("InReview");
+
+  function toggle(id: string, on: boolean) {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (on) next.add(id);
+      else next.delete(id);
+      return next;
+    });
+  }
+
+  function applyBulk() {
+    const ids = [...selected];
+    if (ids.length === 0) return;
+    startTransition(async () => {
+      await setStatusMany(projectId, ids, bulkStatus);
+      setSelected(new Set());
+      router.refresh();
+    });
+  }
 
   if (documents.length === 0) {
     return (
@@ -258,14 +284,49 @@ function Pipeline({ projectId, documents, perms, docTypeOptions }: Props) {
           <ScaffoldButton projectId={projectId} />
         </div>
       )}
+      {perms.canEdit && selected.size > 0 && (
+        <div className="mb-4 flex flex-wrap items-center gap-2 rounded-xl border border-brand/40 bg-brand/5 px-3 py-2">
+          <span className="text-xs font-medium">{selected.size} selected</span>
+          <span className="text-xs text-muted">Set status</span>
+          <Select
+            value={bulkStatus}
+            onChange={setBulkStatus}
+            options={DOC_STATUSES.map((s) => ({ value: s, label: statusLabel(s) }))}
+            className="w-36"
+          />
+          <button
+            onClick={applyBulk}
+            disabled={isPending}
+            className="inline-flex items-center gap-1.5 rounded-lg bg-brand px-3 py-1.5 text-sm font-medium text-brand-fg hover:opacity-90 disabled:opacity-50"
+          >
+            <Check size={14} /> Apply
+          </button>
+          <button
+            onClick={() => setSelected(new Set())}
+            className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-surface px-3 py-1.5 text-sm hover:bg-surface-2"
+          >
+            <X size={14} /> Clear
+          </button>
+        </div>
+      )}
       {documents.map((d, i) => (
         <div key={d.id}>
           <div
             className={cn(
               "flex items-center gap-3 rounded-xl border bg-surface p-4 transition-colors hover:border-brand/50",
-              d.outdated ? "border-red-500/40" : "border-border"
+              d.outdated ? "border-red-500/40" : "border-border",
+              selected.has(d.id) && "border-brand ring-1 ring-brand/40"
             )}
           >
+            {perms.canEdit && (
+              <input
+                type="checkbox"
+                title="Select for bulk status change"
+                checked={selected.has(d.id)}
+                onChange={(e) => toggle(d.id, e.target.checked)}
+                className="h-4 w-4 shrink-0 accent-brand"
+              />
+            )}
             <Link
               href={`/projects/${projectId}/documents/${d.id}`}
               className="flex min-w-0 flex-1 items-center gap-3"

@@ -20,6 +20,8 @@ go out of date. No more drifting docs.
 | **Dependency Graph** ⭐ | Click a document → all downstream documents light up. The hero feature. |
 | **Impact Analysis** | Editing an **Approved** document — or clicking "Mark as changed" — flags every downstream document **Outdated** automatically |
 | **Auto status flow** | Saving edits moves status without manual steps: **Approved → InReview** (edit undoes approval), **Outdated → InReview** (the edit reconciles it); Draft/InReview stay. A save with no real change is a no-op (no version bump, no ripple) |
+| **Minor edit** | Tick "Minor edit" when saving a typo/formatting fix: patch-version bump (v1.0 → v1.0.1), status untouched, and **downstream is not flagged** — so trivial changes don't cascade |
+| **Bulk status** | Multi-select documents in the pipeline and set their status in one action; picking "In Review" clears the Outdated flag, reconciling over-flagged documents together |
 | **Edit dependencies** | Add/remove links between documents from the graph or the document view (cycle-protected) |
 | **Traceability Matrix** | For each requirement, see which SRS / User Story / API / Test / UAT it traces to |
 | **Project Health** | Completion % overall and per phase (Requirement → Design → API → Testing → Release) |

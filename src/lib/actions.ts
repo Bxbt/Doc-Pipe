@@ -30,9 +30,19 @@ async function starterContentFor(type: string): Promise<string> {
 }
 
 function bumpMinor(version: string): string {
-  const m = version.match(/^v?(\d+)\.(\d+)$/);
+  // Accepts vMAJOR.MINOR or vMAJOR.MINOR.PATCH; drops any patch on a minor bump.
+  const m = version.match(/^v?(\d+)\.(\d+)(?:\.\d+)?$/);
   if (!m) return "v1.1";
   return `v${m[1]}.${Number(m[2]) + 1}`;
+}
+
+// Patch bump for minor edits (typo/formatting): vMAJOR.MINOR -> vMAJOR.MINOR.1,
+// vMAJOR.MINOR.PATCH -> vMAJOR.MINOR.(PATCH+1). Signals "no downstream impact".
+function bumpPatch(version: string): string {
+  const m = version.match(/^v?(\d+)\.(\d+)(?:\.(\d+))?$/);
+  if (!m) return "v1.0.1";
+  const patch = m[3] ? Number(m[3]) + 1 : 1;
+  return `v${m[1]}.${m[2]}.${patch}`;
 }
 
 async function loadEdges(projectId: string): Promise<Edge[]> {
@@ -100,7 +110,12 @@ export async function resolveOutdated(projectId: string, documentId: string) {
   revalidatePath(`/projects/${projectId}/documents/${documentId}`);
 }
 
-export async function saveDocument(projectId: string, documentId: string, content: string) {
+export async function saveDocument(
+  projectId: string,
+  documentId: string,
+  content: string,
+  opts: { minor?: boolean } = {}
+) {
   const user = await getCurrentUser();
   if (!canEdit(user)) throw new Error("You need Editor access to edit documents.");
 
@@ -115,6 +130,32 @@ export async function saveDocument(projectId: string, documentId: string, conten
       data: { editingById: null, editingByName: null, editingAt: null },
     });
     revalidatePath(`/projects/${projectId}/documents/${documentId}`);
+    return { impacted: 0 };
+  }
+
+  // Minor edit (typo/formatting): the author asserts downstream is unaffected.
+  // Bump the patch number, leave status/outdated untouched, and skip the ripple.
+  if (opts.minor) {
+    const patched = bumpPatch(doc.version);
+    await prisma.document.update({
+      where: { id: documentId },
+      data: {
+        content,
+        version: patched,
+        updatedById: user.id,
+        editingById: null,
+        editingByName: null,
+        editingAt: null,
+      },
+    });
+    await prisma.documentVersion.create({
+      data: { documentId, version: patched, content, note: "Minor edit", authorId: user.id },
+    });
+    await prisma.activity.create({
+      data: { projectId, userId: user.id, action: "edited", detail: `${doc.title} (minor edit)` },
+    });
+    revalidatePath(`/projects/${projectId}/documents/${documentId}`);
+    revalidatePath(`/projects/${projectId}`);
     return { impacted: 0 };
   }
 
@@ -623,4 +664,32 @@ export async function setStatus(projectId: string, documentId: string, status: s
 
   revalidatePath(`/projects/${projectId}/documents/${documentId}`);
   revalidatePath(`/projects/${projectId}`);
+}
+
+// Bulk status change from the pipeline's multi-select. Setting a status other
+// than "Outdated" clears the outdated flag, so selecting the over-flagged
+// documents and choosing "In Review" reconciles them all in one step.
+export async function setStatusMany(projectId: string, documentIds: string[], status: string) {
+  const user = await getCurrentUser();
+  if (status === "Approved" && !canReview(user))
+    throw new Error("You need Reviewer access to approve documents.");
+  if (!canEdit(user) && !canReview(user))
+    throw new Error("You do not have permission to change status.");
+  if (documentIds.length === 0) return { count: 0 };
+
+  const res = await prisma.document.updateMany({
+    where: { id: { in: documentIds }, projectId },
+    data: { status, outdated: status === "Outdated", updatedById: user.id },
+  });
+  await prisma.activity.create({
+    data: {
+      projectId,
+      userId: user.id,
+      action: "set_status",
+      detail: `${res.count} document(s) → ${status}`,
+    },
+  });
+
+  revalidatePath(`/projects/${projectId}`);
+  return { count: res.count };
 }
