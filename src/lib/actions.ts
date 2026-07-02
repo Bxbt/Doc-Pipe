@@ -5,6 +5,7 @@ import { prisma } from "./db";
 import { getCurrentUser, canEdit, canReview, canAdmin } from "./auth";
 import { downstreamOf, type Edge } from "./graph";
 import { docLabel } from "./constants";
+import { slugType } from "./doc-types";
 import { TEMPLATES } from "./templates";
 import { getBusinessTypePipeline } from "./business-types";
 import { unlink } from "node:fs/promises";
@@ -17,6 +18,13 @@ async function starterContentFor(type: string): Promise<string> {
   const label = docLabel(type);
   const dbTemplate = await prisma.template.findFirst({ where: { name: label } });
   if (dbTemplate) return dbTemplate.content;
+  // Custom types come from Document Library entries whose name was slugged
+  // into the type key ("Security Review" -> SECURITY_REVIEW). docLabel() of
+  // such a type is the raw slug, so the exact-name lookup above misses them —
+  // re-slug each template name to find the match.
+  const all = await prisma.template.findMany({ select: { name: true, content: true } });
+  const bySlug = all.find((t) => slugType(t.name) === type);
+  if (bySlug) return bySlug.content;
   const builtin = TEMPLATES.find((x) => x.name === label);
   return builtin ? builtin.content : `# ${label}\n\n_Start writing…_`;
 }

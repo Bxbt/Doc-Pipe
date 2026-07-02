@@ -8,6 +8,7 @@ import { StatusBadge } from "@/components/badges";
 import { formatDate } from "@/lib/utils";
 import { getCurrentUser, canEdit, canAdmin } from "@/lib/auth";
 import { getBusinessTypes } from "@/lib/business-types";
+import { getDocTypeOptions } from "@/lib/doc-types";
 
 export const dynamic = "force-dynamic";
 
@@ -21,10 +22,11 @@ const TRACE_COLUMNS: { type: string; label: string }[] = [
 ];
 
 export default async function ProjectPage({ params }: { params: { id: string } }) {
-  const [data, user, businessTypes] = await Promise.all([
+  const [data, user, businessTypes, docTypeOptions] = await Promise.all([
     getProjectFull(params.id),
     getCurrentUser(),
     getBusinessTypes(),
+    getDocTypeOptions(),
   ]);
   if (!data) notFound();
   const { project, edges } = data;
@@ -127,6 +129,7 @@ export default async function ProjectPage({ params }: { params: { id: string } }
         }}
         perms={perms}
         businessTypeNames={businessTypes.map((b) => b.name)}
+        docTypeOptions={docTypeOptions}
         documents={documentsLite}
         nodes={nodes}
         edges={edges}

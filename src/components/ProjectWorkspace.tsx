@@ -14,11 +14,13 @@ import {
   Plus,
   Trash2,
   Wand2,
+  X,
 } from "lucide-react";
 import { DependencyGraph, type GraphNode } from "./DependencyGraph";
 import { StatusBadge } from "./badges";
 import { ProgressBar } from "./ui";
 import { Select, DatePicker } from "./inputs";
+import { useScrollLock } from "./useScrollLock";
 import { docLabel, docShort, DOC_TYPES } from "@/lib/constants";
 import { timeAgo, cn } from "@/lib/utils";
 import type { Edge } from "@/lib/graph";
@@ -62,6 +64,9 @@ type Props = {
   };
   perms: { canEdit: boolean; canAdmin: boolean };
   businessTypeNames: string[];
+  // Standard types + Document Library entries (same list the Business Types
+  // page uses), so a new library document is addable to any project.
+  docTypeOptions: { type: string; label: string }[];
   documents: DocLite[];
   nodes: GraphNode[];
   edges: Edge[];
@@ -113,33 +118,88 @@ export function ProjectWorkspace(props: Props) {
   );
 }
 
-function AddDocBar({ projectId, perms }: { projectId: string; perms: Props["perms"] }) {
+function AddDocBar({
+  projectId,
+  perms,
+  docTypeOptions,
+}: {
+  projectId: string;
+  perms: Props["perms"];
+  docTypeOptions: Props["docTypeOptions"];
+}) {
   const router = useRouter();
-  const [type, setType] = useState<string>(DOC_TYPES[0].type);
+  const [open, setOpen] = useState(false);
+  const [type, setType] = useState<string>(docTypeOptions[0]?.type ?? DOC_TYPES[0].type);
   const [isPending, startTransition] = useTransition();
+  useScrollLock(open);
   if (!perms.canEdit) return null;
 
+  function confirmAdd() {
+    startTransition(async () => {
+      // Pass the label as the title so custom library types get a
+      // human name instead of their SLUG_TYPE key.
+      const label = docTypeOptions.find((d) => d.type === type)?.label;
+      await addDocument(projectId, type, label);
+      setOpen(false);
+      router.refresh();
+    });
+  }
+
   return (
-    <div className="flex flex-wrap items-center gap-2">
-      <Select
-        value={type}
-        onChange={setType}
-        options={DOC_TYPES.map((d) => ({ value: d.type, label: d.label }))}
-        className="w-56"
-      />
+    <>
       <button
-        onClick={() =>
-          startTransition(async () => {
-            await addDocument(projectId, type);
-            router.refresh();
-          })
-        }
-        disabled={isPending}
-        className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-surface px-3 py-1.5 text-sm hover:bg-surface-2 disabled:opacity-50"
+        onClick={() => setOpen(true)}
+        className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-surface px-3 py-1.5 text-sm hover:bg-surface-2"
       >
         <Plus size={14} /> Add document
       </button>
-    </div>
+
+      {open && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+          onClick={(e) => e.target === e.currentTarget && setOpen(false)}
+        >
+          <div className="w-full max-w-sm rounded-xl border border-border bg-surface">
+            <div className="flex items-center justify-between border-b border-border px-5 py-3">
+              <h2 className="text-sm font-semibold">Add document</h2>
+              <button
+                onClick={() => setOpen(false)}
+                className="flex h-8 w-8 items-center justify-center rounded-lg text-muted hover:text-fg"
+              >
+                <X size={16} />
+              </button>
+            </div>
+            <div className="flex flex-col gap-1.5 p-5">
+              <span className="text-xs font-medium text-muted">Document type</span>
+              <Select
+                value={type}
+                onChange={setType}
+                options={docTypeOptions.map((d) => ({ value: d.type, label: d.label }))}
+                className="w-full"
+              />
+              <p className="mt-1 text-[11px] leading-relaxed text-muted">
+                Starter content comes from the matching Document Library entry.
+              </p>
+            </div>
+            <div className="flex justify-end gap-2 border-t border-border px-5 py-3">
+              <button
+                onClick={() => setOpen(false)}
+                className="rounded-lg border border-border bg-surface px-3.5 py-2 text-sm hover:bg-surface-2"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={confirmAdd}
+                disabled={isPending}
+                className="inline-flex items-center gap-1.5 rounded-lg bg-brand px-3.5 py-2 text-sm font-medium text-brand-fg hover:opacity-90 disabled:opacity-50"
+              >
+                <Plus size={14} /> {isPending ? "Adding…" : "Add document"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </>
   );
 }
 
@@ -165,7 +225,7 @@ function ScaffoldButton({ projectId, full }: { projectId: string; full?: boolean
   );
 }
 
-function Pipeline({ projectId, documents, perms }: Props) {
+function Pipeline({ projectId, documents, perms, docTypeOptions }: Props) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
 
@@ -181,7 +241,7 @@ function Pipeline({ projectId, documents, perms }: Props) {
           <div className="mt-5 flex flex-col items-center gap-3">
             <ScaffoldButton projectId={projectId} full />
             <div className="text-[11px] text-muted">or</div>
-            <AddDocBar projectId={projectId} perms={perms} />
+            <AddDocBar projectId={projectId} perms={perms} docTypeOptions={docTypeOptions} />
           </div>
         ) : (
           <p className="mt-3 text-xs text-muted">Ask an Editor to add documents.</p>
@@ -194,7 +254,7 @@ function Pipeline({ projectId, documents, perms }: Props) {
     <div className="mx-auto max-w-2xl">
       {perms.canEdit && (
         <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
-          <AddDocBar projectId={projectId} perms={perms} />
+          <AddDocBar projectId={projectId} perms={perms} docTypeOptions={docTypeOptions} />
           <ScaffoldButton projectId={projectId} />
         </div>
       )}

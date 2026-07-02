@@ -69,6 +69,22 @@ export const TEMPLATES: Template[] = [
 ## 6. การตรวจสอบและบันทึก / Audit & Logging`,
   },
   {
+    name: "Flow Diagram",
+    description: "Process / system flow with a Mermaid diagram.",
+    content: `# Flow Diagram
+
+\`\`\`mermaid
+flowchart TD
+  A[Start] --> B{Decision}
+  B -- Yes --> C[Action]
+  B -- No --> D[Alternative]
+  C --> E[End]
+  D --> E
+\`\`\`
+
+Describe the flow above: triggers, actors, and edge cases.`,
+  },
+  {
     name: "User Story",
     description: "As a / I want / So that, with acceptance criteria.",
     content: `# User Stories
@@ -82,7 +98,21 @@ export const TEMPLATES: Template[] = [
 - Given <context>, when <action>, then <outcome>.`,
   },
   {
-    name: "API Documentation",
+    name: "Database Design",
+    description: "Tables, columns, constraints, and indexes.",
+    content: `# Database Design
+
+## Tables
+**<table>**(id, …)
+
+## Constraints
+-
+
+## Indexes
+- `,
+  },
+  {
+    name: "API Specification",
     description: "Endpoints with methods, request/response, status codes.",
     content: `# API Specification
 
