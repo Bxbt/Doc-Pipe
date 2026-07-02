@@ -5,6 +5,12 @@ AI runs on your side using your subscription — this bridge just exposes Doc-Pi
 as MCP tools, authenticated by a personal access token. Doc-Pipe never holds an
 AI key.
 
+> **Most people don't need this.** If Doc-Pipe is deployed, the easiest path is
+> the **remote connector**: in Claude → Connectors → *Add custom connector*,
+> paste `https://<host>/mcp/<your dp_ token>` and click Add — nothing to install.
+> This local bridge is only for running Doc-Pipe on `localhost` or wiring a
+> client that needs stdio.
+
 ## 1. Get a token
 
 In Doc-Pipe: **user menu → Access tokens → Generate token**. Copy it (shown once).
