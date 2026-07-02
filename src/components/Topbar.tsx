@@ -2,7 +2,8 @@
 
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
-import { Search, Menu, LogOut, ChevronDown } from "lucide-react";
+import Link from "next/link";
+import { Search, Menu, LogOut, ChevronDown, KeyRound } from "lucide-react";
 import { ThemeToggle } from "./ThemeToggle";
 import { RoleBadge } from "./badges";
 
@@ -95,6 +96,16 @@ export function Topbar({
               role="menu"
               className="absolute right-0 mt-2 w-44 overflow-hidden rounded-lg border border-border bg-surface py-1 shadow-lg"
             >
+              <Link
+                href="/settings"
+                role="menuitem"
+                onClick={() => setMenuOpen(false)}
+                className="flex items-center gap-2 px-3 py-2 text-sm text-fg hover:bg-surface-2"
+              >
+                <KeyRound size={15} className="text-muted" />
+                Access tokens
+              </Link>
+              <div className="my-1 border-t border-border" />
               <a
                 href="/cdn-cgi/access/logout"
                 role="menuitem"
