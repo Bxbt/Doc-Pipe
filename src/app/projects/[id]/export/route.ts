@@ -91,6 +91,34 @@ export async function GET(req: Request, { params }: { params: { id: string } }) 
   const isDownload = url.searchParams.get("download") === "1";
   const autoPrint = url.searchParams.get("print") === "1";
 
+  // Mermaid diagrams arrive as <pre><code class="language-mermaid">…</code></pre>
+  // (from both HTML and Markdown documents). Load mermaid from a CDN and render
+  // them to inline SVG so the bundle shows real diagrams, not source. If the CDN
+  // is unreachable (offline), the code blocks are left in place — nothing lost.
+  const hasMermaid = /language-mermaid/.test(sections);
+  const scripts = hasMermaid
+    ? `<script type="module">
+  try {
+    const mermaid = (await import("https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs")).default;
+    mermaid.initialize({ startOnLoad: false, securityLevel: "strict", theme: "default" });
+    const blocks = [...document.querySelectorAll("pre > code.language-mermaid")];
+    for (let i = 0; i < blocks.length; i++) {
+      const pre = blocks[i].closest("pre");
+      try {
+        const { svg } = await mermaid.render("mmd-export-" + i, blocks[i].textContent || "");
+        const div = document.createElement("div");
+        div.className = "mermaid-diagram";
+        div.innerHTML = svg;
+        pre.replaceWith(div);
+      } catch (e) {}
+    }
+  } catch (e) {}
+  ${autoPrint ? "setTimeout(() => window.print(), 300);" : ""}
+</script>`
+    : autoPrint
+    ? `<script>window.addEventListener("load", () => setTimeout(() => window.print(), 300));</script>`
+    : "";
+
   const toolbar = isDownload
     ? ""
     : `<div class="toolbar no-print">
@@ -159,6 +187,8 @@ export async function GET(req: Request, { params }: { params: { id: string } }) 
   .doc-body th, .doc-body td { border: 1px solid #d4d4d8; padding: 6px 9px; text-align: left; }
   .doc-body pre { background: #f4f4f5; padding: 12px; border-radius: 8px; overflow: auto; }
   .doc-body code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: .9em; }
+  .mermaid-diagram { margin: 16px 0; text-align: center; break-inside: avoid; }
+  .mermaid-diagram svg { max-width: 100%; height: auto; }
   .footer { margin-top: 40px; padding-top: 12px; border-top: 1px solid #e4e4e7; font-size: 11px; color: #a1a1aa; }
   @media print {
     body { background: #fff; }
@@ -206,7 +236,7 @@ ${toolbar}
 
   <div class="footer">Exported from Doc-Pipe · ${esc(exportedAt)}</div>
 </div>
-${autoPrint ? "<script>window.addEventListener('load',()=>setTimeout(()=>window.print(),300));</script>" : ""}
+${scripts}
 </body>
 </html>`;
 
