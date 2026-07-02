@@ -1,6 +1,6 @@
 import { notFound } from "next/navigation";
 import Link from "next/link";
-import { ArrowLeft } from "lucide-react";
+import { ArrowLeft, Download } from "lucide-react";
 import { getProjectFull, computeHealth, overallCompletion, missingDocs } from "@/lib/queries";
 import { downstreamOf } from "@/lib/graph";
 import { ProjectWorkspace } from "@/components/ProjectWorkspace";
@@ -103,6 +103,16 @@ export default async function ProjectPage({ params }: { params: { id: string } }
             <span>{docs.length} documents</span>
           </div>
         </div>
+        <div className="flex flex-col items-end gap-3">
+        <a
+          href={`/projects/${project.id}/export`}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-surface px-3 py-1.5 text-sm hover:bg-surface-2"
+          title="Export all documents as one file (HTML, or print to PDF)"
+        >
+          <Download size={14} /> Export
+        </a>
         <div className="flex -space-x-2">
           {members.slice(0, 6).map((m) => (
             <div
@@ -113,6 +123,7 @@ export default async function ProjectPage({ params }: { params: { id: string } }
               {m.name.split(" ").map((p) => p[0]).slice(0, 2).join("").toUpperCase()}
             </div>
           ))}
+        </div>
         </div>
       </div>
 

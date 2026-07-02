@@ -29,6 +29,7 @@ go out of date. No more drifting docs.
 | **Smart Checklist** | Recommended documents per business type |
 | **Document Editor** | **Notion-style block editor** (BlockNote) — headings, tables, checklists, **Mermaid diagrams**, code blocks, plus **text colour, highlight, underline, and text/image alignment**; versioning, copy, export |
 | **Attachments** | Upload images / PDF / Word / Excel / CSV / zip (≤10 MB); inline preview for images & PDF. Browse, paste, or drag images straight into a document |
+| **Export project** | Bundle every document (in pipeline order) into one self-contained HTML file — cover page, team, table of contents, and each document with its status/version. Download the `.html` or **Save as PDF** via the browser's print dialog (print-optimised, one document per page) |
 | **Document Library** | Editable catalogue of reusable documents (create / edit / delete) edited with the same block editor; new project documents draw starter content from it, and Business Type pickers list from it |
 | **Custom inputs** | App-wide styled dropdowns and a calendar date picker (portal-based, theme-aware) |
 | **Edit lock** | One person edits a document at a time; others see a "being edited" modal and can't enter. Stale locks (no heartbeat for 90s) auto-release so a closed tab never deadlocks; admins can force-unlock |
@@ -153,6 +154,7 @@ prisma/
 src/
   app/
     (pages)              # dashboard, projects, documents, business-types, templates, team, search
+    projects/[id]/export # route handler: whole-project HTML bundle (download / print-to-PDF)
     api/                 # route handlers: attachment upload + download/serve
   components/            # DependencyGraph (hero), ProjectWorkspace, DocumentDetail,
                          #   BlockEditor, Mermaid, AttachmentPanel, TemplatesManager, BusinessTypesManager, …
