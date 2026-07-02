@@ -1,7 +1,8 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { Search, Menu } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import { Search, Menu, LogOut, ChevronDown } from "lucide-react";
 import { ThemeToggle } from "./ThemeToggle";
 import { RoleBadge } from "./badges";
 
@@ -13,12 +14,33 @@ export function Topbar({
   onMenuClick?: () => void;
 }) {
   const router = useRouter();
+  const [menuOpen, setMenuOpen] = useState(false);
+  const menuRef = useRef<HTMLDivElement>(null);
 
   function onSearch(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     const q = new FormData(e.currentTarget).get("q")?.toString().trim();
     if (q) router.push(`/search?q=${encodeURIComponent(q)}`);
   }
+
+  // Close the user menu on outside click or Escape.
+  useEffect(() => {
+    if (!menuOpen) return;
+    function onDown(e: MouseEvent) {
+      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
+        setMenuOpen(false);
+      }
+    }
+    function onKey(e: KeyboardEvent) {
+      if (e.key === "Escape") setMenuOpen(false);
+    }
+    document.addEventListener("mousedown", onDown);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("mousedown", onDown);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [menuOpen]);
 
   const initials = user.name
     .split(" ")
@@ -47,15 +69,42 @@ export function Topbar({
 
       <div className="ml-auto flex items-center gap-3">
         <ThemeToggle />
-        <div className="flex items-center gap-2.5 rounded-lg border border-border bg-surface py-1.5 pl-1.5 pr-3">
-          <div className="flex h-7 w-7 items-center justify-center rounded-md bg-brand text-xs font-semibold text-brand-fg">
-            {initials}
-          </div>
-          <div className="hidden leading-tight sm:block">
-            <div className="text-xs font-medium">{user.name}</div>
-            <div className="text-[10px] text-muted">{user.email}</div>
-          </div>
-          <RoleBadge role={user.role} />
+        <div ref={menuRef} className="relative">
+          <button
+            onClick={() => setMenuOpen((v) => !v)}
+            aria-haspopup="menu"
+            aria-expanded={menuOpen}
+            className="flex items-center gap-2.5 rounded-lg border border-border bg-surface py-1.5 pl-1.5 pr-2.5 hover:border-brand"
+          >
+            <div className="flex h-7 w-7 items-center justify-center rounded-md bg-brand text-xs font-semibold text-brand-fg">
+              {initials}
+            </div>
+            <div className="hidden leading-tight sm:block">
+              <div className="text-xs font-medium">{user.name}</div>
+              <div className="text-[10px] text-muted">{user.email}</div>
+            </div>
+            <RoleBadge role={user.role} />
+            <ChevronDown
+              size={14}
+              className={`text-muted transition-transform ${menuOpen ? "rotate-180" : ""}`}
+            />
+          </button>
+
+          {menuOpen && (
+            <div
+              role="menu"
+              className="absolute right-0 mt-2 w-44 overflow-hidden rounded-lg border border-border bg-surface py-1 shadow-lg"
+            >
+              <a
+                href="/cdn-cgi/access/logout"
+                role="menuitem"
+                className="flex items-center gap-2 px-3 py-2 text-sm text-fg hover:bg-surface-2"
+              >
+                <LogOut size={15} className="text-muted" />
+                Log out
+              </a>
+            </div>
+          )}
         </div>
       </div>
     </header>
