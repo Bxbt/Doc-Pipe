@@ -6,6 +6,7 @@ import { getCurrentUser, canEdit, canReview, canAdmin } from "./auth";
 import { downstreamOf, type Edge } from "./graph";
 import { docLabel } from "./constants";
 import { slugType } from "./doc-types";
+import { generateToken } from "./tokens";
 import { TEMPLATES } from "./templates";
 import { getBusinessTypePipeline } from "./business-types";
 import { unlink } from "node:fs/promises";
@@ -692,4 +693,25 @@ export async function setStatusMany(projectId: string, documentIds: string[], st
 
   revalidatePath(`/projects/${projectId}`);
   return { count: res.count };
+}
+
+// ── Personal access tokens (for AI / MCP clients) ─────────────────────────
+// A token acts as its owner: it carries that user's role, so a Viewer's token
+// can only read. The raw value is returned once here and never stored.
+export async function createAccessToken(name: string) {
+  const user = await getCurrentUser();
+  const { raw, tokenHash, preview } = generateToken();
+  const token = await prisma.personalAccessToken.create({
+    data: { userId: user.id, name: name.trim() || "Untitled token", tokenHash, preview },
+  });
+  revalidatePath("/settings");
+  // `raw` is shown to the user exactly once; only the hash is persisted.
+  return { id: token.id, raw };
+}
+
+export async function revokeAccessToken(id: string) {
+  const user = await getCurrentUser();
+  // deleteMany scoped to the owner so nobody can revoke another user's token.
+  await prisma.personalAccessToken.deleteMany({ where: { id, userId: user.id } });
+  revalidatePath("/settings");
 }

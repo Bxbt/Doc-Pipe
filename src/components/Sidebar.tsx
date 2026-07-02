@@ -9,6 +9,7 @@ import {
   FileText,
   Users,
   Boxes,
+  KeyRound,
   PanelLeftClose,
   PanelLeftOpen,
   X,
@@ -22,6 +23,7 @@ const nav = [
   { href: "/templates", label: "Document Library", icon: FileText },
   { href: "/business-types", label: "Business Types", icon: Boxes },
   { href: "/team", label: "Team", icon: Users },
+  { href: "/settings", label: "Settings", icon: KeyRound },
 ];
 
 function NavLinks({
