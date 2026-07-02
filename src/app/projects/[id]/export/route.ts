@@ -1,3 +1,5 @@
+import { micromark } from "micromark";
+import { gfm, gfmHtml } from "micromark-extension-gfm";
 import { getCurrentUser } from "@/lib/auth";
 import { getProjectFull, overallCompletion } from "@/lib/queries";
 import { docLabel, docShort } from "@/lib/constants";
@@ -14,11 +16,17 @@ function anchor(id: string): string {
   return `doc-${id}`;
 }
 
-// New documents store HTML; older ones store Markdown. Emit HTML as-is and
-// wrap anything else verbatim so no content is lost in the bundle.
+// New documents store HTML (from the block editor); seeded/older ones store
+// Markdown. Emit HTML as-is; render Markdown to HTML the same way the app's
+// document view does (GFM: tables, task lists, headings) so the bundle matches
+// what users see on screen.
 function contentToHtml(content: string): string {
   if (/^\s*</.test(content)) return content;
-  return `<pre class="legacy-md">${esc(content)}</pre>`;
+  return micromark(content, {
+    allowDangerousHtml: true,
+    extensions: [gfm()],
+    htmlExtensions: [gfmHtml()],
+  });
 }
 
 const STATUS_COLOR: Record<string, string> = {
@@ -151,7 +159,6 @@ export async function GET(req: Request, { params }: { params: { id: string } }) 
   .doc-body th, .doc-body td { border: 1px solid #d4d4d8; padding: 6px 9px; text-align: left; }
   .doc-body pre { background: #f4f4f5; padding: 12px; border-radius: 8px; overflow: auto; }
   .doc-body code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: .9em; }
-  .legacy-md { white-space: pre-wrap; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
   .footer { margin-top: 40px; padding-top: 12px; border-top: 1px solid #e4e4e7; font-size: 11px; color: #a1a1aa; }
   @media print {
     body { background: #fff; }
