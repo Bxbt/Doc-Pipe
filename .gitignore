@@ -16,3 +16,7 @@ tsconfig.tsbuildinfo
 # Uploaded attachments (local dev)
 uploads/
 prisma/uploads/
+
+# stray root db (real db lives in prisma/)
+/dev.db
+/dev.db-journal

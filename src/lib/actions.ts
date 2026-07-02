@@ -107,6 +107,24 @@ export async function saveDocument(projectId: string, documentId: string, conten
   const doc = await prisma.document.findUnique({ where: { id: documentId } });
   if (!doc) throw new Error("Document not found.");
 
+  // No-op save (editor opened and closed without real changes): just release
+  // the lock. Don't bump the version or ripple downstream for nothing.
+  if (content === doc.content) {
+    await prisma.document.update({
+      where: { id: documentId },
+      data: { editingById: null, editingByName: null, editingAt: null },
+    });
+    revalidatePath(`/projects/${projectId}/documents/${documentId}`);
+    return { impacted: 0 };
+  }
+
+  // Editing a document that others rely on carries automatic status flow:
+  //  - Approved -> InReview  (the edit undoes the approval; needs re-review)
+  //  - Outdated -> InReview  (editing it *is* the reconciliation)
+  //  - Draft / InReview stay as-is (still being authored)
+  const wasSettled = doc.status === "Approved" || doc.status === "Outdated";
+  const newStatus = wasSettled ? "InReview" : doc.status;
+
   const newVersion = bumpMinor(doc.version);
   await prisma.document.update({
     where: { id: documentId },
@@ -114,21 +132,48 @@ export async function saveDocument(projectId: string, documentId: string, conten
     data: {
       content,
       version: newVersion,
+      status: newStatus,
+      // The document we just edited is current by definition.
+      outdated: false,
       updatedById: user.id,
       editingById: null,
       editingByName: null,
       editingAt: null,
     },
   });
+
+  // Changing a settled document ripples through the graph: every downstream
+  // document may now be stale, so flag it Outdated automatically — the same
+  // effect as pressing "Mark changed", but without a manual step.
+  let impacted: string[] = [];
+  if (wasSettled) {
+    const edges = await loadEdges(projectId);
+    impacted = [...downstreamOf(documentId, edges)];
+    if (impacted.length) {
+      await prisma.document.updateMany({
+        where: { id: { in: impacted } },
+        data: { outdated: true, status: "Outdated" },
+      });
+    }
+  }
+
   await prisma.documentVersion.create({
     data: { documentId, version: newVersion, content, note: "Edited", authorId: user.id },
   });
   await prisma.activity.create({
-    data: { projectId, userId: user.id, action: "edited", detail: doc.title },
+    data: {
+      projectId,
+      userId: user.id,
+      action: "edited",
+      detail: impacted.length
+        ? `${doc.title} — ${impacted.length} downstream document(s) flagged`
+        : doc.title,
+    },
   });
 
   revalidatePath(`/projects/${projectId}/documents/${documentId}`);
   revalidatePath(`/projects/${projectId}`);
+  return { impacted: impacted.length };
 }
 
 // ── Pessimistic edit lock ─────────────────────────────────────────────────

@@ -18,7 +18,8 @@ go out of date. No more drifting docs.
 | **Dashboard** | Active projects, total/outdated/pending documents, recent activity, missing docs |
 | **Document Pipeline** | A project's documents as a connected pipeline; reorder with ↑/↓ |
 | **Dependency Graph** ⭐ | Click a document → all downstream documents light up. The hero feature. |
-| **Impact Analysis** | "Mark as changed" → every downstream document is flagged **Outdated** automatically |
+| **Impact Analysis** | Editing an **Approved** document — or clicking "Mark as changed" — flags every downstream document **Outdated** automatically |
+| **Auto status flow** | Saving edits moves status without manual steps: **Approved → InReview** (edit undoes approval), **Outdated → InReview** (the edit reconciles it); Draft/InReview stay. A save with no real change is a no-op (no version bump, no ripple) |
 | **Edit dependencies** | Add/remove links between documents from the graph or the document view (cycle-protected) |
 | **Traceability Matrix** | For each requirement, see which SRS / User Story / API / Test / UAT it traces to |
 | **Project Health** | Completion % overall and per phase (Requirement → Design → API → Testing → Release) |
