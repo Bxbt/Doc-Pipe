@@ -82,14 +82,13 @@ export function DocumentDetail({
   const router = useRouter();
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(doc.content);
-  // When true, the next save is treated as a minor edit: patch-version bump,
-  // status untouched, and downstream documents are NOT flagged Outdated.
-  const [minor, setMinor] = useState(false);
+  // Save opens a modal to choose the save kind (normal vs minor edit).
+  const [saveModalOpen, setSaveModalOpen] = useState(false);
   const [isPending, startTransition] = useTransition();
   const [copied, setCopied] = useState(false);
   // Set when someone else holds the lock and we tried to edit.
   const [lockedBy, setLockedBy] = useState<string | null>(null);
-  useScrollLock(!!lockedBy);
+  useScrollLock(!!lockedBy || saveModalOpen);
 
   // Locked by another user (from the server's initial render).
   const lockedByOther = lock.active && !lock.mine;
@@ -117,7 +116,7 @@ export function DocumentDetail({
   function onCancel() {
     // The heartbeat effect's cleanup releases the lock when editing flips off.
     setEditing(false);
-    setMinor(false);
+    setSaveModalOpen(false);
   }
 
   // Admin: force-clear another user's lock, then take it over.
@@ -151,11 +150,11 @@ export function DocumentDetail({
     };
   }, [editing, doc.id]);
 
-  function onSave() {
+  function onSave(minor: boolean) {
     startTransition(async () => {
       await saveDocument(projectId, doc.id, draft, { minor });
+      setSaveModalOpen(false);
       setEditing(false);
-      setMinor(false);
       router.refresh();
     });
   }
@@ -223,6 +222,52 @@ export function DocumentDetail({
         </div>
       )}
 
+      {/* save-choice modal */}
+      {saveModalOpen && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+          onClick={() => setSaveModalOpen(false)}
+        >
+          <div
+            className="w-full max-w-sm rounded-xl border border-border bg-surface p-5 shadow-xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="mb-1 flex items-center gap-2">
+              <Save size={18} className="text-brand" />
+              <h2 className="text-sm font-semibold">Save changes</h2>
+            </div>
+            <p className="text-sm text-muted">
+              A normal save bumps the version and, if this document is Approved, flags every
+              downstream document as Outdated. Choose <span className="font-medium text-fg">Minor
+              edit</span> for a typo or formatting fix that shouldn’t affect anything downstream.
+            </p>
+            <div className="mt-4 flex flex-col gap-2">
+              <button
+                onClick={() => onSave(false)}
+                disabled={isPending}
+                className="inline-flex items-center justify-center gap-1.5 rounded-lg bg-brand px-3 py-2 text-sm font-medium text-brand-fg hover:opacity-90 disabled:opacity-50"
+              >
+                <Save size={14} /> Save
+              </button>
+              <button
+                onClick={() => onSave(true)}
+                disabled={isPending}
+                className="inline-flex items-center justify-center gap-1.5 rounded-lg border border-border bg-surface px-3 py-2 text-sm hover:bg-surface-2 disabled:opacity-50"
+              >
+                <Pencil size={14} /> Minor edit
+              </button>
+              <button
+                onClick={() => setSaveModalOpen(false)}
+                disabled={isPending}
+                className="mt-1 rounded-lg px-3 py-1.5 text-sm text-muted hover:text-fg disabled:opacity-50"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* header */}
       <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
         <div>
@@ -273,7 +318,7 @@ export function DocumentDetail({
         {editing && (
           <>
             <button
-              onClick={onSave}
+              onClick={() => setSaveModalOpen(true)}
               disabled={isPending}
               className="inline-flex items-center gap-1.5 rounded-lg bg-brand px-3 py-1.5 text-sm font-medium text-brand-fg hover:opacity-90 disabled:opacity-50"
             >
@@ -285,18 +330,6 @@ export function DocumentDetail({
             >
               <X size={14} /> Cancel
             </button>
-            <label
-              className="inline-flex cursor-pointer select-none items-center gap-1.5 rounded-lg border border-border bg-surface px-3 py-1.5 text-sm text-muted hover:text-fg"
-              title="Patch-version bump only; keep the status and don't flag downstream documents as Outdated"
-            >
-              <input
-                type="checkbox"
-                checked={minor}
-                onChange={(e) => setMinor(e.target.checked)}
-                className="accent-brand"
-              />
-              Minor edit
-            </label>
           </>
         )}
         <button
