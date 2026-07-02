@@ -25,6 +25,25 @@ model User {
   activities      Activity[]
   versions        DocumentVersion[]
   attachments     Attachment[]
+  accessTokens    PersonalAccessToken[]
+}
+
+// A personal access token lets an external client (e.g. a local MCP bridge
+// running beside the user's Claude/ChatGPT) act as this user over the API.
+// Only the SHA-256 hash is stored; the raw token is shown once at creation.
+model PersonalAccessToken {
+  id         String    @id @default(cuid())
+  userId     String
+  name       String
+  tokenHash  String    @unique
+  // Non-secret display hint, e.g. "dp_ab12…f9" — safe to store and show.
+  preview    String
+  lastUsedAt DateTime?
+  createdAt  DateTime  @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
 }
 
 model Project {
