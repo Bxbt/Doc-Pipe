@@ -59,8 +59,11 @@ Ask Claude naturally, e.g.:
 | `get_project` | List a project's documents |
 | `get_document` | Read a document + its upstream context + type spec |
 | `list_doc_types` | Document types and their authoring specs |
+| `list_business_types` | Business types and the pipeline each scaffolds |
 | `create_document` | Create a document (lands as **Draft**) |
 | `update_document` | Replace a document's content (lands as **In Review**) |
+| `create_project` | Create a project (scaffolds its pipeline as Drafts) |
+| `update_project` | Update a project's metadata |
 
 ## Safety
 

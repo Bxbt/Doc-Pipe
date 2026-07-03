@@ -69,6 +69,42 @@ server.tool(
 );
 
 server.tool(
+  "list_business_types",
+  "List available business types and the document pipeline each one scaffolds. Use before create_project.",
+  {},
+  async () => ok((await api("/api/mcp/business-types")).businessTypes)
+);
+
+server.tool(
+  "create_project",
+  "Create a new project. By default it scaffolds the business type's document pipeline (documents + dependencies) as Drafts to fill in.",
+  {
+    name: z.string(),
+    businessType: z.string().describe("A name from list_business_types, e.g. Web Application"),
+    customer: z.string().optional(),
+    description: z.string().optional(),
+    scaffold: z.boolean().optional().describe("Scaffold the pipeline (default true); false for an empty project"),
+  },
+  async ({ name, businessType, customer, description, scaffold }) =>
+    ok(await api("/api/mcp/projects", { method: "POST", body: { name, businessType, customer, description, scaffold } }))
+);
+
+server.tool(
+  "update_project",
+  "Update a project's metadata (name, customer, businessType, description, status). Only provided fields change. Cannot delete a project.",
+  {
+    projectId: z.string(),
+    name: z.string().optional(),
+    customer: z.string().optional(),
+    businessType: z.string().optional(),
+    description: z.string().optional(),
+    status: z.string().optional().describe("e.g. Active, On Hold, Completed"),
+  },
+  async ({ projectId, ...patch }) =>
+    ok(await api(`/api/mcp/projects/${projectId}`, { method: "PATCH", body: patch }))
+);
+
+server.tool(
   "create_document",
   "Create a new document in a project from Markdown you generate. It lands as a Draft for a human to review.",
   {

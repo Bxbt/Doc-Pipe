@@ -199,7 +199,9 @@ full content of everything **upstream** of it, plus a per-type authoring spec
 (`src/lib/doc-type-specs.ts`) so output is consistent per document type.
 
 **Tools:** `list_projects`, `get_project`, `get_document`, `list_doc_types`,
-`create_document` (→ Draft), `update_document` (→ In Review).
+`list_business_types`, `create_document` (→ Draft), `update_document`
+(→ In Review), `create_project` (scaffolds the pipeline), `update_project`
+(metadata). No delete and no approve via MCP — those stay in human hands.
 
 ### Option A — Remote connector (no install) ⭐
 

@@ -7,6 +7,9 @@ import {
   getDocument,
   createDocument,
   updateDocument,
+  listBusinessTypes,
+  createProject,
+  updateProject,
 } from "@/lib/mcp";
 import type { CurrentUser } from "@/lib/auth";
 
@@ -64,6 +67,51 @@ const TOOLS = [
     description:
       "List document types and their authoring specs (required format/conditions). Use before create_document.",
     inputSchema: { type: "object", properties: {} },
+  },
+  {
+    name: "list_business_types",
+    description:
+      "List available business types and the document pipeline each one scaffolds. Use before create_project to pick a valid businessType.",
+    inputSchema: { type: "object", properties: {} },
+  },
+  {
+    name: "create_project",
+    description:
+      "Create a new project. By default it scaffolds the business type's document pipeline (documents + dependencies) as Drafts for you to fill in with update_document.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        name: { type: "string" },
+        businessType: {
+          type: "string",
+          description: "A name from list_business_types, e.g. 'Web Application'",
+        },
+        customer: { type: "string" },
+        description: { type: "string" },
+        scaffold: {
+          type: "boolean",
+          description: "Scaffold the pipeline documents (default true). Set false for an empty project.",
+        },
+      },
+      required: ["name", "businessType"],
+    },
+  },
+  {
+    name: "update_project",
+    description:
+      "Update a project's metadata (name, customer, businessType, description, status). Only the fields you provide change. Cannot delete a project.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        projectId: { type: "string" },
+        name: { type: "string" },
+        customer: { type: "string" },
+        businessType: { type: "string" },
+        description: { type: "string" },
+        status: { type: "string", description: "e.g. Active, On Hold, Completed" },
+      },
+      required: ["projectId"],
+    },
   },
   {
     name: "create_document",
@@ -125,6 +173,24 @@ async function callTool(
         label: d.label,
         spec: specForType(d.type),
       }));
+    case "list_business_types":
+      return listBusinessTypes();
+    case "create_project":
+      return createProject(user, {
+        name: args.name,
+        businessType: args.businessType,
+        customer: args.customer,
+        description: args.description,
+        scaffold: args.scaffold,
+      });
+    case "update_project":
+      return updateProject(user, args.projectId, {
+        name: args.name,
+        customer: args.customer,
+        businessType: args.businessType,
+        description: args.description,
+        status: args.status,
+      });
     case "create_document":
       return createDocument(
         user,

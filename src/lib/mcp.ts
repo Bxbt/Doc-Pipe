@@ -4,6 +4,9 @@ import { upstreamOf, type Edge } from "./graph";
 import { docLabel, LOCK_TTL_MS } from "./constants";
 import { bumpMinor } from "./versioning";
 import { specForType } from "./doc-type-specs";
+import { slugType } from "./doc-types";
+import { TEMPLATES } from "./templates";
+import { getBusinessTypes, getBusinessTypePipeline } from "./business-types";
 
 // Read/write operations exposed to external AI clients via the MCP API. Every
 // function takes the caller (resolved from their token) explicitly, so the same
@@ -161,4 +164,146 @@ export async function updateDocument(user: CurrentUser, documentId: string, cont
     data: { projectId: doc.projectId, userId: user.id, action: "edited", detail: `${doc.title} (AI draft → In Review)` },
   });
   return { id: documentId, status: "InReview", version: newVersion };
+}
+
+// Starter content for a scaffolded document: prefer a Document Library template
+// (by label or slug), else the built-in template, else a stub. Mirrors the web
+// app's own scaffolding so MCP-created projects look the same.
+async function starterContentFor(type: string): Promise<string> {
+  const label = docLabel(type);
+  const dbTemplate = await prisma.template.findFirst({ where: { name: label } });
+  if (dbTemplate) return dbTemplate.content;
+  const all = await prisma.template.findMany({ select: { name: true, content: true } });
+  const bySlug = all.find((t) => slugType(t.name) === type);
+  if (bySlug) return bySlug.content;
+  const builtin = TEMPLATES.find((x) => x.name === label);
+  return builtin ? builtin.content : `# ${label}\n\n_Start writing…_`;
+}
+
+// The available business types and the document pipeline each one scaffolds.
+// Lets an AI pick a valid businessType (and see what create_project will build).
+export async function listBusinessTypes() {
+  const types = await getBusinessTypes();
+  return types.map((t) => ({
+    name: t.name,
+    documents: t.docTypes.map((d) => ({ type: d, label: docLabel(d) })),
+  }));
+}
+
+// Scaffold a project's pipeline (documents in order + dependency edges) for its
+// business type. Returns how many documents were created.
+async function scaffoldPipeline(
+  user: CurrentUser,
+  projectId: string,
+  businessType: string
+): Promise<number> {
+  const { docTypes, edges } = await getBusinessTypePipeline(businessType);
+  const idByType: Record<string, string> = {};
+
+  let order = -1;
+  for (const type of docTypes) {
+    order += 1;
+    const content = await starterContentFor(type);
+    const doc = await prisma.document.create({
+      data: {
+        projectId,
+        type,
+        title: docLabel(type),
+        status: "Draft",
+        content,
+        version: "v1.0",
+        order,
+        updatedById: user.id,
+      },
+    });
+    idByType[type] = doc.id;
+    await prisma.documentVersion.create({
+      data: { documentId: doc.id, version: "v1.0", content, note: "Scaffolded (MCP)", authorId: user.id },
+    });
+  }
+
+  for (const [from, to] of edges) {
+    const sourceId = idByType[from];
+    const targetId = idByType[to];
+    if (!sourceId || !targetId) continue;
+    await prisma.documentDependency.upsert({
+      where: { sourceId_targetId: { sourceId, targetId } },
+      create: { projectId, sourceId, targetId },
+      update: {},
+    });
+  }
+  return docTypes.length;
+}
+
+// Create a new project. By default it scaffolds the business type's document
+// pipeline (like the web app), so the AI can then fill each document in.
+export async function createProject(
+  user: CurrentUser,
+  input: {
+    name: string;
+    businessType: string;
+    customer?: string;
+    description?: string;
+    scaffold?: boolean;
+  }
+) {
+  if (!canEdit(user)) throw new Error("Editor access required to create projects.");
+  const name = input.name?.trim();
+  if (!name) throw new Error("Project name is required.");
+
+  const project = await prisma.project.create({
+    data: {
+      name,
+      customer: input.customer?.trim() || null,
+      businessType: input.businessType,
+      description: input.description?.trim() || null,
+      status: "Active",
+      members: { create: { userId: user.id } },
+    },
+  });
+  await prisma.activity.create({
+    data: { projectId: project.id, userId: user.id, action: "created_project", detail: `${name} (via MCP)` },
+  });
+
+  const scaffoldedDocuments =
+    input.scaffold === false ? 0 : await scaffoldPipeline(user, project.id, input.businessType);
+
+  return {
+    id: project.id,
+    name,
+    businessType: input.businessType,
+    scaffoldedDocuments,
+  };
+}
+
+// Update a project's metadata (no delete via MCP). Only provided fields change.
+export async function updateProject(
+  user: CurrentUser,
+  projectId: string,
+  input: {
+    name?: string;
+    customer?: string;
+    businessType?: string;
+    description?: string;
+    status?: string;
+  }
+) {
+  if (!canEdit(user)) throw new Error("Editor access required to edit a project.");
+  const project = await prisma.project.findUnique({ where: { id: projectId }, select: { id: true } });
+  if (!project) throw new Error("Project not found.");
+
+  await prisma.project.update({
+    where: { id: projectId },
+    data: {
+      ...(input.name !== undefined ? { name: input.name } : {}),
+      ...(input.customer !== undefined ? { customer: input.customer || null } : {}),
+      ...(input.businessType !== undefined ? { businessType: input.businessType } : {}),
+      ...(input.description !== undefined ? { description: input.description || null } : {}),
+      ...(input.status !== undefined ? { status: input.status } : {}),
+    },
+  });
+  await prisma.activity.create({
+    data: { projectId, userId: user.id, action: "updated_project", detail: input.name ?? "settings (via MCP)" },
+  });
+  return { id: projectId, updated: true };
 }
