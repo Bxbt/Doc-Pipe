@@ -201,7 +201,9 @@ full content of everything **upstream** of it, plus a per-type authoring spec
 **Tools:** `list_projects`, `get_project`, `get_document`, `list_doc_types`,
 `list_business_types`, `create_document` (→ Draft), `update_document`
 (→ In Review), `create_project` (scaffolds the pipeline), `update_project`
-(metadata). No delete and no approve via MCP — those stay in human hands.
+(metadata), `reorder_pipeline`, `link_documents` / `unlink_documents`
+(edit the dependency graph, cycle-protected). No delete and no approve via
+MCP — those stay in human hands.
 
 ### Option A — Remote connector (no install) ⭐
 

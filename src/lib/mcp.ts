@@ -1,6 +1,6 @@
 import { prisma } from "./db";
 import { canEdit, type CurrentUser } from "./auth";
-import { upstreamOf, type Edge } from "./graph";
+import { upstreamOf, downstreamOf, type Edge } from "./graph";
 import { docLabel, LOCK_TTL_MS } from "./constants";
 import { bumpMinor } from "./versioning";
 import { specForType } from "./doc-type-specs";
@@ -274,6 +274,94 @@ export async function createProject(
     businessType: input.businessType,
     scaffoldedDocuments,
   };
+}
+
+// Add a dependency edge: targetId depends on sourceId (source is upstream of
+// target). Rejects self-links, cross-project links, and any edge that would
+// create a cycle — same guards as the web app. Does not flag anything Outdated.
+export async function linkDocuments(
+  user: CurrentUser,
+  projectId: string,
+  sourceId: string,
+  targetId: string
+) {
+  if (!canEdit(user)) throw new Error("Editor access required to link documents.");
+  if (sourceId === targetId) throw new Error("A document cannot depend on itself.");
+
+  const docs = await prisma.document.findMany({ where: { projectId }, select: { id: true } });
+  const ids = new Set(docs.map((d) => d.id));
+  if (!ids.has(sourceId) || !ids.has(targetId)) {
+    throw new Error("Both documents must belong to the project.");
+  }
+
+  const edges = await edgesFor(projectId);
+  if (downstreamOf(targetId, edges).has(sourceId)) {
+    throw new Error("That link would create a circular dependency.");
+  }
+
+  await prisma.documentDependency.upsert({
+    where: { sourceId_targetId: { sourceId, targetId } },
+    create: { projectId, sourceId, targetId },
+    update: {},
+  });
+  await prisma.activity.create({
+    data: { projectId, userId: user.id, action: "linked_documents", detail: `${sourceId} → ${targetId} (via MCP)` },
+  });
+  return { projectId, sourceId, targetId, linked: true };
+}
+
+// Remove a dependency edge (targetId no longer depends on sourceId). Idempotent.
+export async function unlinkDocuments(
+  user: CurrentUser,
+  projectId: string,
+  sourceId: string,
+  targetId: string
+) {
+  if (!canEdit(user)) throw new Error("Editor access required to unlink documents.");
+  await prisma.documentDependency
+    .delete({ where: { sourceId_targetId: { sourceId, targetId } } })
+    .catch(() => {});
+  await prisma.activity.create({
+    data: { projectId, userId: user.id, action: "unlinked_documents", detail: `${sourceId} ↛ ${targetId} (via MCP)` },
+  });
+  return { projectId, sourceId, targetId, unlinked: true };
+}
+
+// Reorder the pipeline from an explicit list of document ids (first = top).
+// Ids not in the project are ignored; documents you omit keep their current
+// relative order after the ones you listed. Returns the final id order.
+export async function reorderPipeline(
+  user: CurrentUser,
+  projectId: string,
+  orderedDocumentIds: string[]
+) {
+  if (!canEdit(user)) throw new Error("Editor access required to reorder the pipeline.");
+
+  const docs = await prisma.document.findMany({
+    where: { projectId },
+    orderBy: [{ order: "asc" }, { createdAt: "asc" }],
+    select: { id: true },
+  });
+  const existing = docs.map((d) => d.id);
+  const idSet = new Set(existing);
+
+  const seen = new Set<string>();
+  const front: string[] = [];
+  for (const id of orderedDocumentIds ?? []) {
+    if (idSet.has(id) && !seen.has(id)) {
+      seen.add(id);
+      front.push(id);
+    }
+  }
+  const finalOrder = [...front, ...existing.filter((id) => !seen.has(id))];
+
+  await prisma.$transaction(
+    finalOrder.map((id, i) => prisma.document.update({ where: { id }, data: { order: i } }))
+  );
+  await prisma.activity.create({
+    data: { projectId, userId: user.id, action: "reordered_pipeline", detail: "Reordered via MCP" },
+  });
+  return { projectId, order: finalOrder };
 }
 
 // Update a project's metadata (no delete via MCP). Only provided fields change.

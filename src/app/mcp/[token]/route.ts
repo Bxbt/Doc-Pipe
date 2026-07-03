@@ -10,6 +10,9 @@ import {
   listBusinessTypes,
   createProject,
   updateProject,
+  linkDocuments,
+  unlinkDocuments,
+  reorderPipeline,
 } from "@/lib/mcp";
 import type { CurrentUser } from "@/lib/auth";
 
@@ -147,6 +150,51 @@ const TOOLS = [
       required: ["documentId", "content"],
     },
   },
+  {
+    name: "reorder_pipeline",
+    description:
+      "Set the order of documents in a project's pipeline. Pass the document ids in the order you want (first = top). Omitted documents keep their current order after the listed ones.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        projectId: { type: "string" },
+        orderedDocumentIds: {
+          type: "array",
+          items: { type: "string" },
+          description: "Document ids, top to bottom",
+        },
+      },
+      required: ["projectId", "orderedDocumentIds"],
+    },
+  },
+  {
+    name: "link_documents",
+    description:
+      "Add a dependency: targetId depends on sourceId (source is upstream of target). Rejected if it would create a circular dependency. Does not flag downstream documents.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        projectId: { type: "string" },
+        sourceId: { type: "string", description: "The upstream document" },
+        targetId: { type: "string", description: "The downstream document that depends on source" },
+      },
+      required: ["projectId", "sourceId", "targetId"],
+    },
+  },
+  {
+    name: "unlink_documents",
+    description:
+      "Remove a dependency edge (targetId no longer depends on sourceId).",
+    inputSchema: {
+      type: "object",
+      properties: {
+        projectId: { type: "string" },
+        sourceId: { type: "string" },
+        targetId: { type: "string" },
+      },
+      required: ["projectId", "sourceId", "targetId"],
+    },
+  },
 ];
 
 async function callTool(
@@ -201,6 +249,12 @@ async function callTool(
       );
     case "update_document":
       return updateDocument(user, args.documentId, args.content);
+    case "reorder_pipeline":
+      return reorderPipeline(user, args.projectId, args.orderedDocumentIds ?? []);
+    case "link_documents":
+      return linkDocuments(user, args.projectId, args.sourceId, args.targetId);
+    case "unlink_documents":
+      return unlinkDocuments(user, args.projectId, args.sourceId, args.targetId);
     default:
       throw new Error(`Unknown tool: ${name}`);
   }

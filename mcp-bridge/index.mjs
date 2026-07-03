@@ -125,6 +125,34 @@ server.tool(
     ok(await api(`/api/mcp/documents/${documentId}`, { method: "POST", body: { content } }))
 );
 
+server.tool(
+  "reorder_pipeline",
+  "Set the order of documents in a project's pipeline. Pass the document ids in the order you want (first = top); omitted documents keep their current order after the listed ones.",
+  { projectId: z.string(), orderedDocumentIds: z.array(z.string()).describe("Document ids, top to bottom") },
+  async ({ projectId, orderedDocumentIds }) =>
+    ok(await api(`/api/mcp/projects/${projectId}/reorder`, { method: "POST", body: { orderedDocumentIds } }))
+);
+
+server.tool(
+  "link_documents",
+  "Add a dependency: targetId depends on sourceId (source is upstream of target). Rejected if it would create a circular dependency.",
+  {
+    projectId: z.string(),
+    sourceId: z.string().describe("The upstream document"),
+    targetId: z.string().describe("The downstream document that depends on source"),
+  },
+  async ({ projectId, sourceId, targetId }) =>
+    ok(await api(`/api/mcp/projects/${projectId}/dependencies`, { method: "POST", body: { sourceId, targetId } }))
+);
+
+server.tool(
+  "unlink_documents",
+  "Remove a dependency edge (targetId no longer depends on sourceId).",
+  { projectId: z.string(), sourceId: z.string(), targetId: z.string() },
+  async ({ projectId, sourceId, targetId }) =>
+    ok(await api(`/api/mcp/projects/${projectId}/dependencies`, { method: "DELETE", body: { sourceId, targetId } }))
+);
+
 const transport = new StdioServerTransport();
 await server.connect(transport);
 console.error(`[doc-pipe] MCP bridge connected to ${BASE}`);

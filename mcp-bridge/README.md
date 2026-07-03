@@ -64,6 +64,9 @@ Ask Claude naturally, e.g.:
 | `update_document` | Replace a document's content (lands as **In Review**) |
 | `create_project` | Create a project (scaffolds its pipeline as Drafts) |
 | `update_project` | Update a project's metadata |
+| `reorder_pipeline` | Set the document order in a project's pipeline |
+| `link_documents` | Add a dependency edge (cycle-protected) |
+| `unlink_documents` | Remove a dependency edge |
 
 ## Safety
 
