@@ -3,7 +3,7 @@ import { gfm, gfmHtml } from "micromark-extension-gfm";
 import { getCurrentUser } from "@/lib/auth";
 import { getProjectFull, overallCompletion } from "@/lib/queries";
 import { docLabel, docShort } from "@/lib/constants";
-import { formatDate } from "@/lib/utils";
+import { formatDate, decodeParam } from "@/lib/utils";
 
 export const dynamic = "force-dynamic";
 
@@ -47,7 +47,7 @@ export async function GET(req: Request, { params }: { params: { id: string } }) 
   // valid app user locally.
   await getCurrentUser();
 
-  const data = await getProjectFull(params.id);
+  const data = await getProjectFull(decodeParam(params.id));
   if (!data) return new Response("Not found", { status: 404 });
 
   const { project } = data;

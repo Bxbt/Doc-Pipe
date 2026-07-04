@@ -14,6 +14,10 @@ export type GraphNode = {
   type: string;
   status: string;
   outdated: boolean;
+  // Friendly labels resolved server-side (custom/Thai types have no built-in
+  // name); fall back to the built-in helpers when absent.
+  label?: string;
+  short?: string;
 };
 
 const COL_W = 168;
@@ -49,7 +53,7 @@ export function DependencyGraph({
 
   const labelOf = (id: string) => {
     const n = nodes.find((x) => x.id === id);
-    return n ? docLabel(n.type) : id;
+    return n ? n.label ?? docLabel(n.type) : id;
   };
 
   // Auto-layout: columns by pipeline stage, stacked within a column.
@@ -203,7 +207,7 @@ export function DependencyGraph({
                 />
                 <circle cx={16} cy={NODE_H / 2} r={5} fill={fill} />
                 <text x={30} y={NODE_H / 2 - 3} fontSize={11} fontWeight={600} fill="rgb(var(--fg))">
-                  {docShort(n.type)}
+                  {n.short ?? docShort(n.type)}
                 </text>
                 <text x={30} y={NODE_H / 2 + 11} fontSize={9} fill="rgb(var(--muted))">
                   {n.outdated ? "outdated" : n.status.toLowerCase()}
@@ -218,7 +222,7 @@ export function DependencyGraph({
       {selectedNode && (
         <div className="mt-3 flex flex-wrap items-center gap-3 rounded-xl border border-border bg-surface p-4">
           <div className="flex-1">
-            <div className="text-sm font-medium">{docLabel(selectedNode.type)}</div>
+            <div className="text-sm font-medium">{selectedNode.label ?? docLabel(selectedNode.type)}</div>
             <div className="text-xs text-muted">
               Changing this impacts{" "}
               <span className="font-semibold text-red-400">{impacted.size}</span> downstream

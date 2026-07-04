@@ -9,7 +9,7 @@ import {
   type ReactNode,
 } from "react";
 import { createPortal } from "react-dom";
-import { ChevronDown, Check, Calendar as CalendarIcon, ChevronLeft, ChevronRight } from "lucide-react";
+import { ChevronDown, Check, Search, Calendar as CalendarIcon, ChevronLeft, ChevronRight } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 /**
@@ -117,6 +117,7 @@ export function Select({
   placeholder = "Select…",
   disabled,
   className,
+  searchable,
 }: {
   value?: string;
   defaultValue?: string;
@@ -126,14 +127,35 @@ export function Select({
   placeholder?: string;
   disabled?: boolean;
   className?: string;
+  // Show a filter box inside the dropdown. Defaults on for long lists.
+  searchable?: boolean;
 }) {
   const controlled = value !== undefined;
   const [inner, setInner] = useState(defaultValue ?? "");
   const current = controlled ? value! : inner;
   const [open, setOpen] = useState(false);
+  const [query, setQuery] = useState("");
   const btnRef = useRef<HTMLButtonElement>(null);
+  const searchRef = useRef<HTMLInputElement>(null);
 
   const selected = options.find((o) => o.value === current);
+  const showSearch = searchable ?? options.length > 8;
+  const q = query.trim().toLowerCase();
+  const shown = q
+    ? options.filter(
+        (o) => o.label.toLowerCase().includes(q) || o.value.toLowerCase().includes(q)
+      )
+    : options;
+
+  // Reset the filter each time the dropdown opens and focus the search box.
+  useEffect(() => {
+    if (!open) return;
+    setQuery("");
+    if (showSearch) {
+      const t = setTimeout(() => searchRef.current?.focus(), 0);
+      return () => clearTimeout(t);
+    }
+  }, [open, showSearch]);
 
   function pick(v: string) {
     if (!controlled) setInner(v);
@@ -162,9 +184,30 @@ export function Select({
       </button>
 
       <Popover open={open} onClose={() => setOpen(false)} anchorRef={btnRef}>
+        {showSearch && (
+          <div className="flex items-center gap-2 border-b border-border px-2.5 py-2">
+            <Search size={14} className="shrink-0 text-muted" />
+            <input
+              ref={searchRef}
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  e.preventDefault();
+                  if (shown.length === 1) pick(shown[0].value);
+                }
+              }}
+              placeholder="Search…"
+              className="w-full bg-transparent text-sm outline-none placeholder:text-muted"
+            />
+          </div>
+        )}
         <div className="max-h-64 overflow-y-auto p-1">
           {options.length === 0 && <div className="px-3 py-2 text-xs text-muted">No options</div>}
-          {options.map((o) => {
+          {options.length > 0 && shown.length === 0 && (
+            <div className="px-3 py-2 text-xs text-muted">No matches</div>
+          )}
+          {shown.map((o) => {
             const on = o.value === current;
             return (
               <button

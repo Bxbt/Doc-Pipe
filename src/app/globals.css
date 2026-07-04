@@ -124,6 +124,24 @@ body {
   opacity: 0.4;
 }
 
+/* Match the editor's text sizing to the read view (.prose-doc) so nothing
+   balloons when you switch into edit mode. BlockNote sizes headings in `em`
+   off a 16px base (h1 = 3em, h2 = 2em, h3 = 1.5em), which is far larger than
+   the rendered document — pin them to the same sizes the reader sees. */
+.bn-wrap .bn-editor {
+  font-size: 0.95rem;
+  line-height: 1.7;
+}
+.bn-wrap .bn-block-content[data-content-type="heading"] {
+  font-size: 1.5rem !important; /* h1 (BlockNote omits data-level for level 1) */
+}
+.bn-wrap .bn-block-content[data-content-type="heading"][data-level="2"] {
+  font-size: 1.2rem !important;
+}
+.bn-wrap .bn-block-content[data-content-type="heading"][data-level="3"] {
+  font-size: 1.05rem !important;
+}
+
 /* Document Library modal: scroll the editor content internally so the modal
    body doesn't need overflow — otherwise it clips BlockNote's absolutely
    positioned slash/+ menu. The menu is a sibling of .bn-editor, so its own

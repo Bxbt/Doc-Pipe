@@ -23,7 +23,7 @@ import { AttachmentPanel } from "./AttachmentPanel";
 import { Select } from "./inputs";
 import { useScrollLock } from "./useScrollLock";
 import { StatusBadge } from "./badges";
-import { docLabel, docShort, LOCK_HEARTBEAT_MS } from "@/lib/constants";
+import { docShort, LOCK_HEARTBEAT_MS } from "@/lib/constants";
 import { cn } from "@/lib/utils";
 import {
   markChanged,
@@ -45,8 +45,8 @@ const BlockEditor = dynamic(
   { ssr: false, loading: () => <p className="text-sm text-muted">Loading editor…</p> }
 );
 
-type RelDoc = { id: string; type: string; status: string };
-type PickDoc = { id: string; type: string; title: string };
+type RelDoc = { id: string; type: string; typeLabel: string; status: string };
+type PickDoc = { id: string; type: string; typeLabel: string; title: string };
 
 type Doc = {
   id: string;
@@ -498,7 +498,7 @@ function RelatedPanel({
             disabled={isPending}
             placeholder="Select a document…"
             onChange={(v) => v && link(v)}
-            options={options.map((d) => ({ value: d.id, label: `${docLabel(d.type)} — ${d.title}` }))}
+            options={options.map((d) => ({ value: d.id, label: `${d.typeLabel} — ${d.title}` }))}
             className="text-xs"
           />
         </div>
@@ -521,7 +521,7 @@ function RelatedPanel({
                 href={`/projects/${projectId}/documents/${d.id}`}
                 className="truncate hover:text-brand"
               >
-                {docLabel(d.type)}
+                {d.typeLabel}
               </Link>
               <div className="flex shrink-0 items-center gap-1.5">
                 <StatusBadge status={d.status} />

@@ -1,12 +1,13 @@
 import { authFromRequest, unauthorized } from "@/lib/mcp-auth";
 import { getDocument, updateDocument } from "@/lib/mcp";
+import { decodeParam } from "@/lib/utils";
 
 export const dynamic = "force-dynamic";
 
 export async function GET(req: Request, { params }: { params: { id: string } }) {
   const user = await authFromRequest(req);
   if (!user) return unauthorized();
-  const doc = await getDocument(params.id);
+  const doc = await getDocument(decodeParam(params.id));
   if (!doc) return Response.json({ error: "Document not found" }, { status: 404 });
   return Response.json(doc);
 }
@@ -21,7 +22,7 @@ export async function POST(req: Request, { params }: { params: { id: string } })
     return Response.json({ error: "`content` is required" }, { status: 400 });
   }
   try {
-    const res = await updateDocument(user, params.id, body.content);
+    const res = await updateDocument(user, decodeParam(params.id), body.content);
     return Response.json(res);
   } catch (e) {
     return Response.json({ error: (e as Error).message }, { status: 400 });

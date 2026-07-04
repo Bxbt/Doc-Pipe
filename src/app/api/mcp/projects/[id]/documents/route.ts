@@ -1,5 +1,6 @@
 import { authFromRequest, unauthorized } from "@/lib/mcp-auth";
 import { createDocument } from "@/lib/mcp";
+import { decodeParam } from "@/lib/utils";
 
 export const dynamic = "force-dynamic";
 
@@ -13,7 +14,7 @@ export async function POST(req: Request, { params }: { params: { id: string } })
     return Response.json({ error: "`type` and `content` are required" }, { status: 400 });
   }
   try {
-    const res = await createDocument(user, params.id, body.type, body.title ?? "", body.content);
+    const res = await createDocument(user, decodeParam(params.id), body.type, body.title ?? "", body.content);
     return Response.json(res, { status: 201 });
   } catch (e) {
     return Response.json({ error: (e as Error).message }, { status: 400 });

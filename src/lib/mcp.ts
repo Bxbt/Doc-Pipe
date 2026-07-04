@@ -5,6 +5,7 @@ import { docLabel, LOCK_TTL_MS } from "./constants";
 import { bumpMinor } from "./versioning";
 import { specForType } from "./doc-type-specs";
 import { slugType } from "./doc-types";
+import { newProjectId, newDocumentId } from "./slug";
 import { TEMPLATES } from "./templates";
 import { getBusinessTypes, getBusinessTypePipeline } from "./business-types";
 
@@ -121,11 +122,13 @@ export async function createDocument(
     select: { order: true },
   });
 
+  const docTitle = title.trim() || docLabel(type);
   const doc = await prisma.document.create({
     data: {
+      id: await newDocumentId(docTitle),
       projectId,
       type,
-      title: title.trim() || docLabel(type),
+      title: docTitle,
       status: "Draft",
       content,
       version: "v1.0",
@@ -199,13 +202,17 @@ async function scaffoldPipeline(
 ): Promise<number> {
   const { docTypes, edges } = await getBusinessTypePipeline(businessType);
   const idByType: Record<string, string> = {};
+  const usedIds = new Set<string>();
 
   let order = -1;
   for (const type of docTypes) {
     order += 1;
     const content = await starterContentFor(type);
+    const id = await newDocumentId(docLabel(type), usedIds);
+    usedIds.add(id);
     const doc = await prisma.document.create({
       data: {
+        id,
         projectId,
         type,
         title: docLabel(type),
@@ -253,6 +260,7 @@ export async function createProject(
 
   const project = await prisma.project.create({
     data: {
+      id: await newProjectId(name),
       name,
       customer: input.customer?.trim() || null,
       businessType: input.businessType,

@@ -31,14 +31,15 @@ go out of date. No more drifting docs.
 | **Document Editor** | **Notion-style block editor** (BlockNote) — headings, tables, checklists, **Mermaid diagrams**, code blocks, plus **text colour, highlight, underline, and text/image alignment**; versioning, copy, export |
 | **Attachments** | Upload images / PDF / Word / Excel / CSV / zip (≤10 MB); inline preview for images & PDF. Browse, paste, or drag images straight into a document |
 | **Export project** | Bundle every document (in pipeline order) into one self-contained HTML file — cover page, team, table of contents, and each document with its status/version. Markdown is rendered to HTML and **Mermaid diagrams render as real diagrams** (not source). Download the `.html` or **Save as PDF** via the browser's print dialog (print-optimised, one document per page) |
-| **Document Library** | Editable catalogue of reusable documents (create / edit / delete) edited with the same block editor; new project documents draw starter content from it, and Business Type pickers list from it |
-| **Custom inputs** | App-wide styled dropdowns and a calendar date picker (portal-based, theme-aware) |
+| **Document Library** | Editable catalogue of reusable documents (create / edit / delete) edited with the same block editor; new project documents draw starter content from it, and Business Type pickers list from it. Names in any language (e.g. Thai) carry through to the project as the document's title |
+| **Custom inputs** | App-wide styled dropdowns (with a built-in search filter on long lists) and a calendar date picker (portal-based, theme-aware) |
 | **Edit lock** | One person edits a document at a time; others see a "being edited" modal and can't enter. Stale locks (no heartbeat for 90s) auto-release so a closed tab never deadlocks; admins can force-unlock |
 | **AI drafting (MCP)** | Connect your **own** Claude/ChatGPT to read & draft documents via [MCP](#-ai-drafting-via-mcp) — a hosted remote connector (paste a URL) or a local bridge. Doc-Pipe never holds an AI key; AI writes land as **Draft / In Review** for a human to approve |
 | **Access tokens** | Per-user personal access tokens (`dp_…`, SHA-256 hashed, role-scoped, revocable) in the user menu → *Access tokens*, used to authenticate MCP clients |
 | **Profile** | Edit your display name from the user menu → *Profile* |
 | **Roles** | Admin · Editor · Reviewer · Viewer (authorization enforced server-side) |
 | **Project meta** | Customer, business type, status, start/end dates |
+| **Readable URLs** | New projects and documents get a human-readable slug id from their name (e.g. `/projects/vote-system`) instead of a random string; existing links keep working |
 | **Search** | Global search across projects and documents, **debounced live** from the top bar as you type |
 | **Audit log** | Activity feed; each entry **links to the document** it concerns (or its project) and shows the project name. Shows the latest 10 with a show-more toggle (up to 50); entries survive even after a project is deleted |
 

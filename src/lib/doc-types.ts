@@ -2,9 +2,17 @@ import { DOC_TYPES } from "./constants";
 import { getTemplates } from "./templates-db";
 
 // Turn a free-text document name into a stable type key, e.g.
-// "Security Review" -> "SECURITY_REVIEW".
+// "Security Review" -> "SECURITY_REVIEW". Names with no A–Z/0–9 characters at
+// all (e.g. a purely Thai name) would otherwise collapse to an empty string and
+// vanish from every picker, so they fall back to a deterministic CUSTOM_<hash>
+// key derived from the original name.
 export function slugType(name: string): string {
-  return name.trim().toUpperCase().replace(/[^A-Z0-9]+/g, "_").replace(/^_+|_+$/g, "");
+  const ascii = name.trim().toUpperCase().replace(/[^A-Z0-9]+/g, "_").replace(/^_+|_+$/g, "");
+  if (ascii) return ascii;
+  let h = 0;
+  const s = name.trim();
+  for (let i = 0; i < s.length; i++) h = (Math.imul(31, h) + s.charCodeAt(i)) | 0;
+  return `CUSTOM_${(h >>> 0).toString(36).toUpperCase()}`;
 }
 
 // The document-type picker = the 11 standard types PLUS any extra Document

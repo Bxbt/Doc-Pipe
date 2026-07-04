@@ -5,10 +5,11 @@ import { getProjectFull, computeHealth, overallCompletion, missingDocs } from "@
 import { downstreamOf } from "@/lib/graph";
 import { ProjectWorkspace } from "@/components/ProjectWorkspace";
 import { StatusBadge } from "@/components/badges";
-import { formatDate } from "@/lib/utils";
+import { formatDate, decodeParam } from "@/lib/utils";
 import { getCurrentUser, canEdit, canAdmin } from "@/lib/auth";
 import { getBusinessTypes } from "@/lib/business-types";
 import { getDocTypeOptions } from "@/lib/doc-types";
+import { docLabel, DOC_TYPE_MAP } from "@/lib/constants";
 
 export const dynamic = "force-dynamic";
 
@@ -23,7 +24,7 @@ const TRACE_COLUMNS: { type: string; label: string }[] = [
 
 export default async function ProjectPage({ params }: { params: { id: string } }) {
   const [data, user, businessTypes, docTypeOptions] = await Promise.all([
-    getProjectFull(params.id),
+    getProjectFull(decodeParam(params.id)),
     getCurrentUser(),
     getBusinessTypes(),
     getDocTypeOptions(),
@@ -37,9 +38,18 @@ export default async function ProjectPage({ params }: { params: { id: string } }
   const completion = overallCompletion(docs);
   const missing = missingDocs(project.businessType, docs);
 
+  // Friendly labels for custom Document Library types (which may be Thai);
+  // standard types fall back to their built-in name/short code.
+  const typeLabelOf = (t: string) =>
+    docTypeOptions.find((o) => o.type === t)?.label ?? docLabel(t);
+  const typeShortOf = (t: string) =>
+    DOC_TYPE_MAP[t]?.short ?? typeLabelOf(t).trim().slice(0, 3);
+
   const nodes = docs.map((d) => ({
     id: d.id,
     type: d.type,
+    label: typeLabelOf(d.type),
+    short: typeShortOf(d.type),
     status: d.status,
     outdated: d.outdated,
     gx: d.gx,

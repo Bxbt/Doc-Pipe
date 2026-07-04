@@ -232,6 +232,13 @@ function ScaffoldButton({ projectId, full }: { projectId: string; full?: boolean
 function Pipeline({ projectId, documents, perms, docTypeOptions }: Props) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
+  // Friendly label for a document type. Standard types use their built-in name;
+  // custom Document Library types (which may be Thai) use their library name so
+  // the pipeline never falls back to a raw SLUG_TYPE key.
+  const typeLabel = (t: string) => docTypeOptions.find((o) => o.type === t)?.label ?? docLabel(t);
+  const isStandard = (t: string) => DOC_TYPES.some((d) => d.type === t);
+  const shortFor = (t: string) =>
+    isStandard(t) ? docShort(t) : typeLabel(t).trim().slice(0, 3);
   // Multi-select: pick several documents and change their status in one action.
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [bulkStatus, setBulkStatus] = useState<string>("InReview");
@@ -332,12 +339,12 @@ function Pipeline({ projectId, documents, perms, docTypeOptions }: Props) {
               className="flex min-w-0 flex-1 items-center gap-3"
             >
               <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-surface-2 text-[11px] font-semibold text-muted">
-                {docShort(d.type)}
+                {shortFor(d.type)}
               </div>
               <div className="min-w-0 flex-1">
-                <div className="truncate text-sm font-medium">{docLabel(d.type)}</div>
+                <div className="truncate text-sm font-medium">{d.title}</div>
                 <div className="truncate text-[11px] text-muted">
-                  {d.title} · {d.version} · updated {timeAgo(d.updatedAt)}
+                  {typeLabel(d.type)} · {d.version} · updated {timeAgo(d.updatedAt)}
                 </div>
               </div>
             </Link>
@@ -381,7 +388,7 @@ function Pipeline({ projectId, documents, perms, docTypeOptions }: Props) {
               <button
                 title="Delete document"
                 onClick={() => {
-                  if (!confirm(`Delete "${docLabel(d.type)}"? This also removes its links.`)) return;
+                  if (!confirm(`Delete "${d.title}"? This also removes its links.`)) return;
                   startTransition(async () => {
                     await deleteDocument(projectId, d.id);
                     router.refresh();
