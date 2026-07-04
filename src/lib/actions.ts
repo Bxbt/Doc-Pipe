@@ -440,13 +440,24 @@ export async function addDependency(projectId: string, sourceId: string, targetI
     throw new Error("That link would create a circular dependency.");
   }
 
+  const [src, tgt] = await Promise.all([
+    prisma.document.findUnique({ where: { id: sourceId }, select: { type: true } }),
+    prisma.document.findUnique({ where: { id: targetId }, select: { type: true } }),
+  ]);
+  const label = (d: { type: string } | null, id: string) => (d ? docLabel(d.type) : id);
+
   await prisma.documentDependency.upsert({
     where: { sourceId_targetId: { sourceId, targetId } },
     create: { projectId, sourceId, targetId },
     update: {},
   });
   await prisma.activity.create({
-    data: { projectId, userId: user.id, action: "linked_documents", detail: `${sourceId} → ${targetId}` },
+    data: {
+      projectId,
+      userId: user.id,
+      action: "linked_documents",
+      detail: `${label(src, sourceId)} → ${label(tgt, targetId)}`,
+    },
   });
   revalidatePath(`/projects/${projectId}`);
   revalidatePath(`/projects/${projectId}/documents/${targetId}`);

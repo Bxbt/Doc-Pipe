@@ -288,9 +288,12 @@ export async function linkDocuments(
   if (!canEdit(user)) throw new Error("Editor access required to link documents.");
   if (sourceId === targetId) throw new Error("A document cannot depend on itself.");
 
-  const docs = await prisma.document.findMany({ where: { projectId }, select: { id: true } });
-  const ids = new Set(docs.map((d) => d.id));
-  if (!ids.has(sourceId) || !ids.has(targetId)) {
+  const docs = await prisma.document.findMany({
+    where: { projectId },
+    select: { id: true, type: true },
+  });
+  const labelById = new Map(docs.map((d) => [d.id, docLabel(d.type)]));
+  if (!labelById.has(sourceId) || !labelById.has(targetId)) {
     throw new Error("Both documents must belong to the project.");
   }
 
@@ -305,7 +308,12 @@ export async function linkDocuments(
     update: {},
   });
   await prisma.activity.create({
-    data: { projectId, userId: user.id, action: "linked_documents", detail: `${sourceId} → ${targetId} (via MCP)` },
+    data: {
+      projectId,
+      userId: user.id,
+      action: "linked_documents",
+      detail: `${labelById.get(sourceId)} → ${labelById.get(targetId)} (via MCP)`,
+    },
   });
   return { projectId, sourceId, targetId, linked: true };
 }
@@ -318,11 +326,22 @@ export async function unlinkDocuments(
   targetId: string
 ) {
   if (!canEdit(user)) throw new Error("Editor access required to unlink documents.");
+  const [src, tgt] = await Promise.all([
+    prisma.document.findUnique({ where: { id: sourceId }, select: { type: true } }),
+    prisma.document.findUnique({ where: { id: targetId }, select: { type: true } }),
+  ]);
+  const label = (d: { type: string } | null, id: string) => (d ? docLabel(d.type) : id);
+
   await prisma.documentDependency
     .delete({ where: { sourceId_targetId: { sourceId, targetId } } })
     .catch(() => {});
   await prisma.activity.create({
-    data: { projectId, userId: user.id, action: "unlinked_documents", detail: `${sourceId} ↛ ${targetId} (via MCP)` },
+    data: {
+      projectId,
+      userId: user.id,
+      action: "unlinked_documents",
+      detail: `${label(src, sourceId)} ↛ ${label(tgt, targetId)} (via MCP)`,
+    },
   });
   return { projectId, sourceId, targetId, unlinked: true };
 }
