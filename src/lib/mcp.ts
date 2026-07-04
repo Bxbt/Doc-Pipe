@@ -137,7 +137,7 @@ export async function createDocument(
     data: { documentId: doc.id, version: "v1.0", content, note: "AI draft (MCP)", authorId: user.id },
   });
   await prisma.activity.create({
-    data: { projectId, userId: user.id, action: "added_document", detail: `${doc.title} (AI draft)` },
+    data: { projectId, documentId: doc.id, userId: user.id, action: "added_document", detail: `${doc.title} (AI draft)` },
   });
   return { id: doc.id, status: doc.status, version: doc.version };
 }
@@ -161,7 +161,7 @@ export async function updateDocument(user: CurrentUser, documentId: string, cont
     data: { documentId, version: newVersion, content, note: "AI draft (MCP)", authorId: user.id },
   });
   await prisma.activity.create({
-    data: { projectId: doc.projectId, userId: user.id, action: "edited", detail: `${doc.title} (AI draft → In Review)` },
+    data: { projectId: doc.projectId, documentId, userId: user.id, action: "edited", detail: `${doc.title} (AI draft → In Review)` },
   });
   return { id: documentId, status: "InReview", version: newVersion };
 }
@@ -310,6 +310,7 @@ export async function linkDocuments(
   await prisma.activity.create({
     data: {
       projectId,
+      documentId: targetId,
       userId: user.id,
       action: "linked_documents",
       detail: `${labelById.get(sourceId)} → ${labelById.get(targetId)} (via MCP)`,
@@ -338,6 +339,7 @@ export async function unlinkDocuments(
   await prisma.activity.create({
     data: {
       projectId,
+      documentId: targetId,
       userId: user.id,
       action: "unlinked_documents",
       detail: `${label(src, sourceId)} ↛ ${label(tgt, targetId)} (via MCP)`,

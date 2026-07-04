@@ -65,6 +65,7 @@ export async function markChanged(projectId: string, documentId: string) {
   await prisma.activity.create({
     data: {
       projectId,
+      documentId,
       userId: user.id,
       action: "marked_changed",
       detail: `${doc.title} changed — ${impacted.length} document(s) impacted`,
@@ -89,7 +90,7 @@ export async function resolveOutdated(projectId: string, documentId: string) {
     data: { outdated: false, status: "InReview", version: bumpMinor(doc.version), updatedById: user.id },
   });
   await prisma.activity.create({
-    data: { projectId, userId: user.id, action: "resolved_outdated", detail: doc.title },
+    data: { projectId, documentId, userId: user.id, action: "resolved_outdated", detail: doc.title },
   });
 
   revalidatePath(`/projects/${projectId}`);
@@ -138,7 +139,7 @@ export async function saveDocument(
       data: { documentId, version: patched, content, note: "Minor edit", authorId: user.id },
     });
     await prisma.activity.create({
-      data: { projectId, userId: user.id, action: "edited", detail: `${doc.title} (minor edit)` },
+      data: { projectId, documentId, userId: user.id, action: "edited", detail: `${doc.title} (minor edit)` },
     });
     revalidatePath(`/projects/${projectId}/documents/${documentId}`);
     revalidatePath(`/projects/${projectId}`);
@@ -190,6 +191,7 @@ export async function saveDocument(
   await prisma.activity.create({
     data: {
       projectId,
+      documentId,
       userId: user.id,
       action: "edited",
       detail: impacted.length
@@ -317,6 +319,20 @@ export async function setUserRole(userId: string, role: string) {
   revalidatePath("/team");
 }
 
+// Update the current user's own profile. For now just the display name; more
+// fields can follow. The name shows on activity, documents, and the user chip.
+export async function updateProfile(input: { name: string }) {
+  const user = await getCurrentUser();
+  const name = input.name.trim();
+  if (!name) throw new Error("Name cannot be empty.");
+  if (name.length > 80) throw new Error("Name is too long.");
+  await prisma.user.update({ where: { id: user.id }, data: { name } });
+  revalidatePath("/profile");
+  revalidatePath("/");
+  revalidatePath("/team");
+  return { name };
+}
+
 export async function updateProject(
   projectId: string,
   input: {
@@ -388,7 +404,7 @@ export async function addDocument(projectId: string, type: string, title?: strin
     data: { documentId: doc.id, version: "v1.0", content: doc.content, note: "Created", authorId: user.id },
   });
   await prisma.activity.create({
-    data: { projectId, userId: user.id, action: "added_document", detail: doc.title },
+    data: { projectId, documentId: doc.id, userId: user.id, action: "added_document", detail: doc.title },
   });
 
   revalidatePath(`/projects/${projectId}`);
@@ -412,7 +428,7 @@ export async function deleteAttachment(attachmentId: string) {
     // file already gone — ignore
   }
   await prisma.activity.create({
-    data: { projectId: att.document.projectId, userId: user.id, action: "deleted_attachment", detail: att.filename },
+    data: { projectId: att.document.projectId, documentId: att.documentId, userId: user.id, action: "deleted_attachment", detail: att.filename },
   });
   revalidatePath(`/projects/${att.document.projectId}/documents/${att.documentId}`);
 }
@@ -454,6 +470,7 @@ export async function addDependency(projectId: string, sourceId: string, targetI
   await prisma.activity.create({
     data: {
       projectId,
+      documentId: targetId,
       userId: user.id,
       action: "linked_documents",
       detail: `${label(src, sourceId)} → ${label(tgt, targetId)}`,
@@ -656,7 +673,7 @@ export async function setStatus(projectId: string, documentId: string, status: s
     data: { status, outdated: status === "Outdated", updatedById: user.id },
   });
   await prisma.activity.create({
-    data: { projectId, userId: user.id, action: "set_status", detail: `${doc.title} → ${status}` },
+    data: { projectId, documentId, userId: user.id, action: "set_status", detail: `${doc.title} → ${status}` },
   });
 
   revalidatePath(`/projects/${projectId}/documents/${documentId}`);

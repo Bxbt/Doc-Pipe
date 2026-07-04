@@ -65,7 +65,7 @@ export async function getDashboardData() {
       }),
       prisma.activity.findMany({
         orderBy: { createdAt: "desc" },
-        take: 8,
+        take: 50,
         include: { user: { select: { name: true } }, project: { select: { name: true } } },
       }),
     ]);

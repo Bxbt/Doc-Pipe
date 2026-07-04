@@ -115,6 +115,7 @@ model Document {
   comments Comment[]
   versions DocumentVersion[]
   attachments Attachment[]
+  activities Activity[]
 
   @@index([projectId])
 }
@@ -210,6 +211,9 @@ model BusinessType {
 model Activity {
   id        String   @id @default(cuid())
   projectId String?
+  // The document this activity is about, when it concerns a single document
+  // (edited, added, status change, link target…). Null for project-level events.
+  documentId String?
   userId    String?
   // Free-form action label, e.g. "marked_changed", "edited", "approved"
   action    String
@@ -218,6 +222,8 @@ model Activity {
 
   // Keep the audit trail even after a project is deleted (projectId becomes null).
   project Project? @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  // Likewise survive document deletion — the link just drops to the project.
+  document Document? @relation(fields: [documentId], references: [id], onDelete: SetNull)
   user    User?    @relation(fields: [userId], references: [id])
 
   @@index([projectId])

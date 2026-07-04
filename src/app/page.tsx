@@ -10,6 +10,7 @@ import {
 import { getDashboardData, overallCompletion } from "@/lib/queries";
 import { Card, StatCard, ProgressBar, PageHeader } from "@/components/ui";
 import { StatusBadge } from "@/components/badges";
+import { ActivityFeed } from "@/components/ActivityFeed";
 import { docLabel } from "@/lib/constants";
 import { timeAgo } from "@/lib/utils";
 
@@ -134,37 +135,7 @@ export default async function DashboardPage() {
               <ActivityIcon size={15} className="text-muted" />
               <h2 className="text-sm font-semibold">Recent Activity</h2>
             </div>
-            <Card className="flex flex-col gap-2.5 p-4">
-              {data.activities.length === 0 && (
-                <p className="text-xs text-muted">No activity yet.</p>
-              )}
-              {data.activities.map((a) => {
-                const body = (
-                  <>
-                    <span className="font-medium">{a.user?.name ?? "Someone"}</span>{" "}
-                    <span className="text-muted">{a.action.replace(/_/g, " ")}</span>
-                    {a.detail ? <span className="text-muted"> — {a.detail}</span> : null}
-                    <div className="text-[10px] text-muted">
-                      {a.project?.name ? `${a.project.name} · ` : ""}
-                      {timeAgo(a.createdAt)}
-                    </div>
-                  </>
-                );
-                return a.projectId ? (
-                  <Link
-                    key={a.id}
-                    href={`/projects/${a.projectId}`}
-                    className="-mx-2 block rounded px-2 py-0.5 text-xs hover:bg-surface-2"
-                  >
-                    {body}
-                  </Link>
-                ) : (
-                  <div key={a.id} className="text-xs">
-                    {body}
-                  </div>
-                );
-              })}
-            </Card>
+            <ActivityFeed activities={data.activities} />
           </div>
         </div>
       </div>

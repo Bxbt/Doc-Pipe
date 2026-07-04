@@ -1,9 +1,9 @@
 "use client";
 
-import { useRouter } from "next/navigation";
+import { useRouter, usePathname } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import { Search, Menu, LogOut, ChevronDown, KeyRound } from "lucide-react";
+import { Search, Menu, LogOut, ChevronDown, KeyRound, UserRound } from "lucide-react";
 import { ThemeToggle } from "./ThemeToggle";
 import { RoleBadge } from "./badges";
 
@@ -15,13 +15,33 @@ export function Topbar({
   onMenuClick?: () => void;
 }) {
   const router = useRouter();
+  const pathname = usePathname();
   const [menuOpen, setMenuOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
+  const searchTimer = useRef<ReturnType<typeof setTimeout>>();
 
+  // Navigate to the search results for a query. While already on /search we
+  // replace (no history spam per keystroke); otherwise push once.
+  function goSearch(raw: string) {
+    const q = raw.trim();
+    const url = q ? `/search?q=${encodeURIComponent(q)}` : "/search";
+    if (pathname === "/search") router.replace(url);
+    else router.push(url);
+  }
+
+  // Debounced live search as the user types.
+  function onSearchChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const value = e.target.value;
+    clearTimeout(searchTimer.current);
+    searchTimer.current = setTimeout(() => goSearch(value), 350);
+  }
+
+  // Enter searches immediately (cancel any pending debounce).
   function onSearch(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
-    const q = new FormData(e.currentTarget).get("q")?.toString().trim();
-    if (q) router.push(`/search?q=${encodeURIComponent(q)}`);
+    clearTimeout(searchTimer.current);
+    const q = new FormData(e.currentTarget).get("q")?.toString() ?? "";
+    goSearch(q);
   }
 
   // Close the user menu on outside click or Escape.
@@ -63,6 +83,7 @@ export function Topbar({
         <Search size={16} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-muted" />
         <input
           name="q"
+          onChange={onSearchChange}
           placeholder="Search projects, documents, requirements…"
           className="w-full rounded-lg border border-border bg-surface py-2 pl-9 pr-3 text-sm outline-none placeholder:text-muted focus:border-brand"
         />
@@ -96,6 +117,15 @@ export function Topbar({
               role="menu"
               className="absolute right-0 mt-2 w-44 overflow-hidden rounded-lg border border-border bg-surface py-1 shadow-lg"
             >
+              <Link
+                href="/profile"
+                role="menuitem"
+                onClick={() => setMenuOpen(false)}
+                className="flex items-center gap-2 px-3 py-2 text-sm text-fg hover:bg-surface-2"
+              >
+                <UserRound size={15} className="text-muted" />
+                Profile
+              </Link>
               <Link
                 href="/settings"
                 role="menuitem"

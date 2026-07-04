@@ -36,10 +36,11 @@ go out of date. No more drifting docs.
 | **Edit lock** | One person edits a document at a time; others see a "being edited" modal and can't enter. Stale locks (no heartbeat for 90s) auto-release so a closed tab never deadlocks; admins can force-unlock |
 | **AI drafting (MCP)** | Connect your **own** Claude/ChatGPT to read & draft documents via [MCP](#-ai-drafting-via-mcp) — a hosted remote connector (paste a URL) or a local bridge. Doc-Pipe never holds an AI key; AI writes land as **Draft / In Review** for a human to approve |
 | **Access tokens** | Per-user personal access tokens (`dp_…`, SHA-256 hashed, role-scoped, revocable) in the user menu → *Access tokens*, used to authenticate MCP clients |
+| **Profile** | Edit your display name from the user menu → *Profile* |
 | **Roles** | Admin · Editor · Reviewer · Viewer (authorization enforced server-side) |
 | **Project meta** | Customer, business type, status, start/end dates |
-| **Search** | Global search across projects and documents |
-| **Audit log** | Activity feed; entries survive even after a project is deleted |
+| **Search** | Global search across projects and documents, **debounced live** from the top bar as you type |
+| **Audit log** | Activity feed; each entry **links to the document** it concerns (or its project) and shows the project name. Shows the latest 10 with a show-more toggle (up to 50); entries survive even after a project is deleted |
 
 ## 🧱 Tech Stack
 
