@@ -6,6 +6,8 @@ import { getCurrentUser, canEdit, canReview, canAdmin } from "./auth";
 import { downstreamOf, type Edge } from "./graph";
 import { docLabel } from "./constants";
 import { slugType } from "./doc-types";
+import { generateToken } from "./tokens";
+import { bumpMinor, bumpPatch } from "./versioning";
 import { TEMPLATES } from "./templates";
 import { getBusinessTypePipeline } from "./business-types";
 import { unlink } from "node:fs/promises";
@@ -27,22 +29,6 @@ async function starterContentFor(type: string): Promise<string> {
   if (bySlug) return bySlug.content;
   const builtin = TEMPLATES.find((x) => x.name === label);
   return builtin ? builtin.content : `# ${label}\n\n_Start writing…_`;
-}
-
-function bumpMinor(version: string): string {
-  // Accepts vMAJOR.MINOR or vMAJOR.MINOR.PATCH; drops any patch on a minor bump.
-  const m = version.match(/^v?(\d+)\.(\d+)(?:\.\d+)?$/);
-  if (!m) return "v1.1";
-  return `v${m[1]}.${Number(m[2]) + 1}`;
-}
-
-// Patch bump for minor edits (typo/formatting): vMAJOR.MINOR -> vMAJOR.MINOR.1,
-// vMAJOR.MINOR.PATCH -> vMAJOR.MINOR.(PATCH+1). Signals "no downstream impact".
-function bumpPatch(version: string): string {
-  const m = version.match(/^v?(\d+)\.(\d+)(?:\.(\d+))?$/);
-  if (!m) return "v1.0.1";
-  const patch = m[3] ? Number(m[3]) + 1 : 1;
-  return `v${m[1]}.${m[2]}.${patch}`;
 }
 
 async function loadEdges(projectId: string): Promise<Edge[]> {
@@ -692,4 +678,25 @@ export async function setStatusMany(projectId: string, documentIds: string[], st
 
   revalidatePath(`/projects/${projectId}`);
   return { count: res.count };
+}
+
+// ── Personal access tokens (for AI / MCP clients) ─────────────────────────
+// A token acts as its owner: it carries that user's role, so a Viewer's token
+// can only read. The raw value is returned once here and never stored.
+export async function createAccessToken(name: string) {
+  const user = await getCurrentUser();
+  const { raw, tokenHash, preview } = generateToken();
+  const token = await prisma.personalAccessToken.create({
+    data: { userId: user.id, name: name.trim() || "Untitled token", tokenHash, preview },
+  });
+  revalidatePath("/settings");
+  // `raw` is shown to the user exactly once; only the hash is persisted.
+  return { id: token.id, raw };
+}
+
+export async function revokeAccessToken(id: string) {
+  const user = await getCurrentUser();
+  // deleteMany scoped to the owner so nobody can revoke another user's token.
+  await prisma.personalAccessToken.deleteMany({ where: { id, userId: user.id } });
+  revalidatePath("/settings");
 }

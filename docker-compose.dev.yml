@@ -1,0 +1,41 @@
+# Dev deployment — a SECOND, isolated instance for testing the feat/ai-mcp work
+# at dev.doc-pipe.bboybezz.xyz, completely separate from production.
+#
+# In Portainer: create a NEW stack from this repository, set the reference to
+# refs/heads/feat/ai-mcp and the compose path to docker-compose.dev.yml.
+# It uses its own container names + its own volume, so dev data never touches
+# the production database.
+services:
+  app:
+    build: .
+    image: doc-pipeline:dev
+    container_name: doc-pipeline-dev
+    restart: unless-stopped
+    environment:
+      # Separate SQLite file on a separate volume — dev data is isolated.
+      - DATABASE_URL=file:/data/app.db
+      - UPLOAD_DIR=/data/uploads
+      - ADMIN_EMAILS=${ADMIN_EMAILS:-}
+      # Dev wants the demo project seeded so there's something to try.
+      - SEED_ON_EMPTY=${SEED_ON_EMPTY:-true}
+      - NODE_ENV=production
+    volumes:
+      - pipeline-data-dev:/data
+    expose:
+      - "3000"
+
+  # A dev-only Cloudflare Tunnel. Create a SEPARATE tunnel in Zero Trust,
+  # route the public hostname dev.doc-pipe.bboybezz.xyz to http://app:3000,
+  # and set TUNNEL_TOKEN (dev) in the stack's environment.
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    container_name: doc-pipeline-tunnel-dev
+    restart: unless-stopped
+    command: tunnel --no-autoupdate run
+    environment:
+      - TUNNEL_TOKEN=${TUNNEL_TOKEN}
+    depends_on:
+      - app
+
+volumes:
+  pipeline-data-dev:
