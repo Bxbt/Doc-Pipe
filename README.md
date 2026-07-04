@@ -5,9 +5,10 @@ instantly see which downstream documents (SRS → User Story → API → Test Ca
 go out of date. No more drifting docs.
 
 > Built end-to-end **by prompting AI only** — no code written by hand — for a Friday Sharing.
-> The application itself contains **no AI at runtime**; every "smart" feature (impact analysis,
+> The app **runs no AI itself and holds no AI key**; every "smart" feature (impact analysis,
 > traceability, project health, smart checklist) is deterministic logic over a single
-> document dependency graph.
+> document dependency graph. Optionally, connect **your own** Claude/ChatGPT to read and draft
+> documents via [MCP](#-ai-drafting-via-mcp) — the AI runs on your side, not ours.
 
 ---
 
@@ -50,6 +51,8 @@ go out of date. No more drifting docs.
   (colour, underline, alignment, image size) persists; legacy Markdown documents
   still load. The view renders HTML through `rehype-raw` + `rehype-sanitize`
 - **Mermaid** for diagrams (lazy-loaded client-side)
+- **Model Context Protocol** (`@modelcontextprotocol/sdk`) — a remote Streamable-HTTP
+  connector plus a local stdio bridge so a user's own AI can read and draft documents
 - **Docker** + **Cloudflare Tunnel** + **Cloudflare Access** for production
 
 Authentication is **delegated to Cloudflare Access** — the app reads the verified
