@@ -39,7 +39,6 @@ go out of date. No more drifting docs.
 | **Profile** | Edit your display name from the user menu → *Profile* |
 | **Roles** | Admin · Editor · Reviewer · Viewer (authorization enforced server-side) |
 | **Project meta** | Customer, business type, status, start/end dates |
-| **Readable URLs** | New projects and documents get a human-readable slug id from their name (e.g. `/projects/vote-system`) instead of a random string; existing links keep working |
 | **Search** | Global search across projects and documents, **debounced live** from the top bar as you type |
 | **Audit log** | Activity feed; each entry **links to the document** it concerns (or its project) and shows the project name. Shows the latest 10 with a show-more toggle (up to 50); entries survive even after a project is deleted |
 

@@ -6,7 +6,6 @@ import { getCurrentUser, canEdit, canReview, canAdmin } from "@/lib/auth";
 import { directDependencies, directDependents } from "@/lib/graph";
 import { DocumentDetail } from "@/components/DocumentDetail";
 import { docLabel, LOCK_TTL_MS } from "@/lib/constants";
-import { decodeParam } from "@/lib/utils";
 import { getDocTypeOptions } from "@/lib/doc-types";
 
 export const dynamic = "force-dynamic";
@@ -16,19 +15,17 @@ export default async function DocumentPage({
 }: {
   params: { id: string; docId: string };
 }) {
-  const projectId = decodeParam(params.id);
-  const docId = decodeParam(params.docId);
   const [user, doc, project, docTypeOptions] = await Promise.all([
     getCurrentUser(),
     prisma.document.findUnique({
-      where: { id: docId },
+      where: { id: params.docId },
       include: {
         updatedBy: { select: { name: true } },
         attachments: { orderBy: { createdAt: "asc" } },
       },
     }),
     prisma.project.findUnique({
-      where: { id: projectId },
+      where: { id: params.id },
       include: {
         documents: { select: { id: true, type: true, title: true, status: true, outdated: true } },
         dependencies: true,

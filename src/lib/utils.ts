@@ -5,17 +5,6 @@ export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
 }
 
-// Decode a dynamic route param before looking it up. Slug ids can contain
-// non-ASCII characters (e.g. a Thai title), which arrive percent-encoded in
-// `params`; decoding is a no-op for plain ASCII ids and safe on malformed input.
-export function decodeParam(value: string): string {
-  try {
-    return decodeURIComponent(value);
-  } catch {
-    return value;
-  }
-}
-
 export function humanSize(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`;
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(0)} KB`;

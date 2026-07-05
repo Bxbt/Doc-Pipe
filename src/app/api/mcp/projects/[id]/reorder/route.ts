@@ -1,6 +1,5 @@
 import { authFromRequest, unauthorized } from "@/lib/mcp-auth";
 import { reorderPipeline } from "@/lib/mcp";
-import { decodeParam } from "@/lib/utils";
 
 export const dynamic = "force-dynamic";
 
@@ -13,7 +12,7 @@ export async function POST(req: Request, { params }: { params: { id: string } })
     return Response.json({ error: "orderedDocumentIds (array) is required" }, { status: 400 });
   }
   try {
-    return Response.json(await reorderPipeline(user, decodeParam(params.id), body.orderedDocumentIds));
+    return Response.json(await reorderPipeline(user, params.id, body.orderedDocumentIds));
   } catch (e: any) {
     return Response.json({ error: e?.message ?? String(e) }, { status: 400 });
   }

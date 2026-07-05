@@ -5,7 +5,6 @@ import { prisma } from "./db";
 import { getCurrentUser, canEdit, canReview, canAdmin } from "./auth";
 import { downstreamOf, type Edge } from "./graph";
 import { docLabel } from "./constants";
-import { newProjectId, newDocumentId } from "./slug";
 import { slugType } from "./doc-types";
 import { generateToken } from "./tokens";
 import { bumpMinor, bumpPatch } from "./versioning";
@@ -294,7 +293,6 @@ export async function createProject(input: {
 
   const project = await prisma.project.create({
     data: {
-      id: await newProjectId(input.name),
       name: input.name,
       customer: input.customer || null,
       businessType: input.businessType,
@@ -390,13 +388,11 @@ export async function addDocument(projectId: string, type: string, title?: strin
     select: { order: true },
   });
 
-  const docTitle = title?.trim() || docLabel(type);
   const doc = await prisma.document.create({
     data: {
-      id: await newDocumentId(docTitle),
       projectId,
       type,
-      title: docTitle,
+      title: title?.trim() || docLabel(type),
       status: "Draft",
       content: await starterContentFor(type),
       version: "v1.0",
@@ -507,7 +503,6 @@ export async function scaffoldPipeline(projectId: string) {
 
   const existing = await prisma.document.findMany({ where: { projectId } });
   const idByType: Record<string, string> = {};
-  const usedIds = new Set(existing.map((d) => d.id));
   let maxOrder = -1;
   for (const d of existing) {
     idByType[d.type] = d.id;
@@ -518,11 +513,8 @@ export async function scaffoldPipeline(projectId: string) {
   for (const type of docTypes) {
     if (idByType[type]) continue;
     maxOrder += 1;
-    const id = await newDocumentId(docLabel(type), usedIds);
-    usedIds.add(id);
     const doc = await prisma.document.create({
       data: {
-        id,
         projectId,
         type,
         title: docLabel(type),

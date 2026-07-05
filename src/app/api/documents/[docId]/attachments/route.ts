@@ -9,7 +9,6 @@ import {
   MAX_UPLOAD_BYTES,
   ALLOWED_MIME,
 } from "@/lib/storage";
-import { decodeParam } from "@/lib/utils";
 
 export async function POST(req: Request, { params }: { params: { docId: string } }) {
   const user = await getCurrentUser();
@@ -17,7 +16,7 @@ export async function POST(req: Request, { params }: { params: { docId: string }
     return NextResponse.json({ error: "Editor access required." }, { status: 403 });
   }
 
-  const doc = await prisma.document.findUnique({ where: { id: decodeParam(params.docId) } });
+  const doc = await prisma.document.findUnique({ where: { id: params.docId } });
   if (!doc) return NextResponse.json({ error: "Document not found." }, { status: 404 });
 
   const form = await req.formData();

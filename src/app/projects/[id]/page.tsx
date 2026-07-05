@@ -5,7 +5,7 @@ import { getProjectFull, computeHealth, overallCompletion, missingDocs } from "@
 import { downstreamOf } from "@/lib/graph";
 import { ProjectWorkspace } from "@/components/ProjectWorkspace";
 import { StatusBadge } from "@/components/badges";
-import { formatDate, decodeParam } from "@/lib/utils";
+import { formatDate } from "@/lib/utils";
 import { getCurrentUser, canEdit, canAdmin } from "@/lib/auth";
 import { getBusinessTypes } from "@/lib/business-types";
 import { getDocTypeOptions } from "@/lib/doc-types";
@@ -24,7 +24,7 @@ const TRACE_COLUMNS: { type: string; label: string }[] = [
 
 export default async function ProjectPage({ params }: { params: { id: string } }) {
   const [data, user, businessTypes, docTypeOptions] = await Promise.all([
-    getProjectFull(decodeParam(params.id)),
+    getProjectFull(params.id),
     getCurrentUser(),
     getBusinessTypes(),
     getDocTypeOptions(),
