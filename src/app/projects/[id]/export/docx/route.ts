@@ -1,6 +1,7 @@
 import { micromark } from "micromark";
 import { gfm, gfmHtml } from "micromark-extension-gfm";
 import HTMLtoDOCX from "html-to-docx";
+import JSZip from "jszip";
 import { prisma } from "@/lib/db";
 import { getCurrentUser } from "@/lib/auth";
 import { getProjectFull } from "@/lib/queries";
@@ -32,6 +33,23 @@ function contentToHtml(content: string): string {
 
 const statusText = (s: string, outdated: boolean) =>
   outdated ? "Outdated" : s === "InReview" ? "In Review" : s;
+
+// html-to-docx@1.8 emits the body-level <w:sectPr> as the FIRST child of
+// <w:body>, but the OOXML schema requires it to be LAST — so Word refuses to
+// open the file ("Word experienced an error…"). Move it to the end.
+async function moveSectPrToEnd(buffer: Buffer): Promise<Buffer> {
+  const zip = await JSZip.loadAsync(buffer);
+  const file = zip.file("word/document.xml");
+  if (!file) return buffer;
+  let xml = await file.async("string");
+  const m = xml.match(/<w:body>\s*(<w:sectPr>[\s\S]*?<\/w:sectPr>)/);
+  if (!m) return buffer;
+  const sectPr = m[1];
+  xml = xml.replace(sectPr, "");
+  xml = xml.replace("</w:body>", () => `${sectPr}</w:body>`);
+  zip.file("word/document.xml", xml);
+  return zip.generateAsync({ type: "nodebuffer" });
+}
 
 export async function GET(req: Request, { params }: { params: { id: string } }) {
   // Access is gated by Cloudflare Access in prod; this also ensures a valid user.
@@ -130,16 +148,20 @@ ${contentToHtml(d.content)}`
 
   const buffer: Buffer = await HTMLtoDOCX(html, null, {
     orientation: "portrait",
-    margins: { top: 1440, right: 1440, bottom: 1440, left: 1440 },
+    // All six keys are required — html-to-docx writes the literal string
+    // "undefined" into <w:pgMar> for any omitted one, which makes Word refuse
+    // to open the file.
+    margins: { top: 1440, right: 1440, bottom: 1440, left: 1440, header: 720, footer: 720, gutter: 0 },
     title: project.name,
     pageNumber: true,
     table: { row: { cantSplit: true } },
   });
+  const fixed = await moveSectPrToEnd(buffer);
 
   const filenameBase =
     project.name.replace(/[^\w.-]+/g, "_").replace(/^_+|_+$/g, "") || "project";
 
-  return new Response(buffer as unknown as BodyInit, {
+  return new Response(fixed as unknown as BodyInit, {
     headers: {
       "Content-Type": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
       "Content-Disposition": `attachment; filename="${filenameBase}_SRS.docx"`,
