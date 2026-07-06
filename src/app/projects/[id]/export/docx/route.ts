@@ -29,14 +29,20 @@ function esc(s: string): string {
 const PAGE_BREAK = `<div style="page-break-after:always"></div>`;
 
 // Newer documents store HTML (block editor); older/seeded ones store Markdown.
+// Never throws — a document that can't be converted degrades to a note rather
+// than failing the whole export.
 function contentToHtml(content: string): string {
   if (!content?.trim()) return "<p><em>— ยังไม่มีเนื้อหา —</em></p>";
-  if (/^\s*</.test(content)) return content;
-  return micromark(content, {
-    allowDangerousHtml: true,
-    extensions: [gfm()],
-    htmlExtensions: [gfmHtml()],
-  });
+  try {
+    if (/^\s*</.test(content)) return content;
+    return micromark(content, {
+      allowDangerousHtml: true,
+      extensions: [gfm()],
+      htmlExtensions: [gfmHtml()],
+    });
+  } catch {
+    return "<p><em>— ไม่สามารถแปลงเนื้อหาได้ —</em></p>";
+  }
 }
 
 const statusText = (s: string, outdated: boolean) =>
