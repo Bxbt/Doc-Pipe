@@ -309,6 +309,26 @@ export async function GET(_req: Request, { params }: { params: { id: string } })
     }
   }
   for (const m of merged.media) outZip.file(`word/media/${m.name}`, m.data);
+  // Injected image drawings use the DrawingML `a:` and `pic:` prefixes, but the
+  // template's <w:document> root only declares them when its own body has inline
+  // images (the logo lives in the header) — so they can be absent. Declare any
+  // that are missing, or Word rejects the file ("experienced an error…").
+  if (merged.media.length) {
+    let docXml = outZip.file("word/document.xml")?.asText() || "";
+    if (docXml) {
+      docXml = docXml.replace(/<w:document\b[^>]*>/, (tag) => {
+        let out = tag;
+        if (!/\bxmlns:a=/.test(out)) {
+          out = out.replace(/>$/, ' xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main">');
+        }
+        if (!/\bxmlns:pic=/.test(out)) {
+          out = out.replace(/>$/, ' xmlns:pic="http://schemas.openxmlformats.org/drawingml/2006/picture">');
+        }
+        return out;
+      });
+      outZip.file("word/document.xml", docXml);
+    }
+  }
   if (merged.relsAppend) {
     const rels = outZip.file("word/_rels/document.xml.rels")?.asText() || "";
     if (rels) {
