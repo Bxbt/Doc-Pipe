@@ -50,7 +50,10 @@ SECTION_MAP = {
 }
 
 # Sections whose template boilerplate we keep as-is (not filled from Doc-Pipe).
-KEEP_TEMPLATE = {"PAYMENT_METHOD", "SOFTWARE_AGREEMENT", "SIGNATURES"}
+# Empty: every mapped section (all 16, including the commercial ones) is now
+# filled from Doc-Pipe — the projects carry real Payment / Agreement / Signature
+# content, so the boilerplate is replaced rather than kept.
+KEEP_TEMPLATE: set[str] = set()
 
 
 def text_of(p):

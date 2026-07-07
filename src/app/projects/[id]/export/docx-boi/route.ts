@@ -29,9 +29,9 @@ export const dynamic = "force-dynamic";
 
 // The BOI sections filled from Doc-Pipe documents (matched by the custom
 // doc-type key of the "BOI SRS" business type). Must match the {@body<KEY>}
-// slots produced by scripts/tag-boi-template.py. The commercial/boilerplate
-// sections (Payment / Software Agreement / Signatures) are intentionally NOT
-// here — the template keeps its own standard tables for those.
+// slots produced by scripts/tag-boi-template.py — all 16 sections, including
+// the commercial ones (Payment / Software Agreement / Signatures), are filled
+// from the project's own documents.
 const SECTION_KEYS = [
   "RATIONALE",
   "SCOPE_OF_WORK",
@@ -46,6 +46,9 @@ const SECTION_KEYS = [
   "SOFTWARE",
   "DEVELOPER_TEAM",
   "TIMELINE",
+  "PAYMENT_METHOD",
+  "SOFTWARE_AGREEMENT",
+  "SIGNATURES",
 ] as const;
 
 const HTDOCX_OPTS = {
