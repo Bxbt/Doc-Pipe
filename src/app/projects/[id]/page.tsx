@@ -127,9 +127,16 @@ export default async function ProjectPage({ params }: { params: { id: string } }
           <a
             href={`/projects/${project.id}/export/docx`}
             className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-surface px-3 py-1.5 text-sm hover:bg-surface-2"
-            title="Export as a Word .docx (BOI SRS layout, auto-filled revision history)"
+            title="Export as a generic Word .docx (auto-filled revision history)"
           >
-            <FileText size={14} /> Word .docx
+            <FileText size={14} /> Word
+          </a>
+          <a
+            href={`/projects/${project.id}/export/docx-boi`}
+            className="inline-flex items-center gap-1.5 rounded-lg border border-brand bg-brand/10 px-3 py-1.5 text-sm font-medium text-brand hover:bg-brand/20"
+            title="Export using the real BOI SRS Word template (fills each section from the pipeline)"
+          >
+            <FileText size={14} /> Word (BOI)
           </a>
         </div>
         <div className="flex -space-x-2">

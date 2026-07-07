@@ -4,7 +4,7 @@ const nextConfig = {
   // html-to-docx (and its jszip/image-size deps) must run at runtime, not be
   // bundled by webpack for the route handler that generates .docx exports.
   experimental: {
-    serverComponentsExternalPackages: ["html-to-docx"],
+    serverComponentsExternalPackages: ["html-to-docx", "docxtemplater", "pizzip"],
   },
 };
 
