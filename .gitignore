@@ -13,6 +13,9 @@ prisma/dev.db*
 # TS build cache
 tsconfig.tsbuildinfo
 
+# graphify knowledge graph (regenerable via /graphify)
+graphify-out/
+
 # Uploaded attachments (local dev)
 uploads/
 prisma/uploads/
