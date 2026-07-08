@@ -12,6 +12,7 @@ import { getProjectFull } from "@/lib/queries";
 import { docLabel } from "@/lib/constants";
 import { storedPath } from "@/lib/storage";
 import { formatDate } from "@/lib/utils";
+import { swapMermaidImages } from "@/lib/mermaid-export";
 
 // Phase 2 — export a project using the REAL BOI SRS Word template as the format
 // layer. The template (public/boi/SRS_Template.tagged.docx) keeps its cover,
@@ -63,7 +64,7 @@ function esc(s: string): string {
   return s.replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]!));
 }
 
-function contentToHtml(content: string): string {
+export function contentToHtml(content: string): string {
   if (!content?.trim()) return "";
   let html: string;
   try {
@@ -102,6 +103,49 @@ async function embedImages(html: string): Promise<string> {
     (_full, id) =>
       dataUri.get(id) ? `<img src="${dataUri.get(id)}" />` : `<p><em>[รูปภาพแนบ]</em></p>`
   );
+}
+
+// The customer's logo comes from the project's "Logo" library document — its
+// content is BlockNote HTML holding one attachment image. Return the raw image
+// bytes + extension so it can be dropped onto the cover beside our own logo.
+async function coverLogoImage(
+  docs: { type: string; content: string }[]
+): Promise<{ data: Buffer; ext: string } | null> {
+  const doc = docs.find(
+    (d) => d.type === "LOGO" || docLabel(d.type).trim().toLowerCase() === "logo"
+  );
+  if (!doc?.content) return null;
+  const id = doc.content.match(/\/api\/attachments\/([a-z0-9]+)/i)?.[1];
+  if (!id) return null;
+  const att = await prisma.attachment.findUnique({ where: { id } });
+  if (!att?.mime?.startsWith("image/")) return null;
+  try {
+    const data = await readFile(storedPath(att.storedName));
+    const ext = (att.mime.split("/")[1] || "png").toLowerCase().replace("jpeg", "jpg");
+    return { data, ext };
+  } catch {
+    return null;
+  }
+}
+
+// Clone the template's own cover-logo <w:drawing> (a known-good anchored image)
+// and repoint it at the customer logo: new relationship id, unique drawing ids,
+// a fresh name, and a horizontal offset that seats it just left of our logo so
+// the two sit side by side on the same line.
+function customerLogoRun(companyDrawing: string, rid: string): string {
+  const custX = 1668500; // our logo anchors at 3205835 EMU; width is 1423035 → gap to its left
+  const drawing = companyDrawing
+    .replace(/r:embed="rId\d+"/, `r:embed="${rid}"`)
+    .replace(
+      /(<wp:docPr\b[^>]*\bid=")\d+("[^>]*\bname=")[^"]*(")/,
+      `$1901001$2customer-logo$3`
+    )
+    .replace(
+      /(<pic:cNvPr\b[^>]*\bid=")\d+("[^>]*\bname=")[^"]*(")/,
+      `$1901002$2customer-logo$3`
+    )
+    .replace(/(<wp:positionH\b[\s\S]*?<wp:posOffset>)-?\d+(<\/wp:posOffset>)/, `$1${custX}$2`);
+  return `<w:r><w:rPr><w:noProof/></w:rPr>${drawing}</w:r>`;
 }
 
 // Extract the block-level OOXML from a standalone html-to-docx render. Used for
@@ -226,10 +270,28 @@ async function renderSectionsMerged(htmlByKey: Map<string, string>, off: Offsets
 const statusText = (s: string, outdated: boolean) =>
   outdated ? "Outdated" : s === "InReview" ? "In Review" : s;
 
+// GET keeps the plain-link behaviour (mermaid stays as code — no browser to
+// render it). POST carries the browser-rendered diagram PNGs keyed by chart
+// hash, which is what turns mermaid into real diagrams in the output.
 export async function GET(_req: Request, { params }: { params: { id: string } }) {
   await getCurrentUser();
+  return buildBoiDocx(params.id, {});
+}
 
-  const data = await getProjectFull(params.id);
+export async function POST(req: Request, { params }: { params: { id: string } }) {
+  await getCurrentUser();
+  let images: Record<string, string> = {};
+  try {
+    const body = (await req.json()) as { images?: Record<string, string> };
+    if (body?.images && typeof body.images === "object") images = body.images;
+  } catch {
+    /* no/invalid body — export with no diagrams (mermaid falls back to code) */
+  }
+  return buildBoiDocx(params.id, images);
+}
+
+async function buildBoiDocx(id: string, mermaidImages: Record<string, string>) {
+  const data = await getProjectFull(id);
   if (!data) return new Response("Not found", { status: 404 });
   const { project } = data;
   const docs = project.documents;
@@ -268,7 +330,13 @@ export async function GET(_req: Request, { params }: { params: { id: string } })
   const htmlByKey = new Map<string, string>();
   for (const key of SECTION_KEYS) {
     const doc = byType.get(key);
-    if (doc) htmlByKey.set(key, await embedImages(contentToHtml(doc.content)));
+    if (doc) {
+      // contentToHtml → swap mermaid fences for the browser-rendered PNGs →
+      // embed attachment images. The swapped-in <img> is a data URI, so it
+      // rides the same html-to-docx image pass as everything else.
+      const html = swapMermaidImages(contentToHtml(doc.content), mermaidImages);
+      htmlByKey.set(key, await embedImages(html));
+    }
   }
 
   // Render all sections together (lists + images survive); fall back to a plain
@@ -283,6 +351,8 @@ export async function GET(_req: Request, { params }: { params: { id: string } })
       merged.bodies.set(k, await renderSimpleOoxml(h.replace(/<img\b[^>]*>/gi, "<p><em>[รูปภาพ]</em></p>")));
     }
   }
+
+  const customerLogo = await coverLogoImage(docs);
 
   const templateData: Record<string, string> = { projectName: project.name };
   templateData.revisionTable = await renderSimpleOoxml(revisionHtml);
@@ -348,6 +418,41 @@ export async function GET(_req: Request, { params }: { params: { id: string } })
         }
       }
       outZip.file("[Content_Types].xml", ct);
+    }
+  }
+
+  // Seat the customer logo on the cover, beside our own. Done after render (not
+  // via a template tag) so it can clone the template's known-good anchored logo
+  // drawing and share its paragraph — that keeps the two on the same line.
+  if (customerLogo) {
+    const name = `customer-logo.${customerLogo.ext}`;
+    outZip.file(`word/media/${name}`, customerLogo.data);
+
+    let rels = outZip.file("word/_rels/document.xml.rels")?.asText() || "";
+    const nextRid = "rId" + (Math.max(0, ...[...rels.matchAll(/Id="rId(\d+)"/g)].map((m) => +m[1])) + 1);
+    rels = rels.replace(
+      "</Relationships>",
+      `<Relationship Id="${nextRid}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" Target="media/${name}"/></Relationships>`
+    );
+    outZip.file("word/_rels/document.xml.rels", rels);
+
+    let ct = outZip.file("[Content_Types].xml")?.asText() || "";
+    if (!new RegExp(`Extension="${customerLogo.ext}"`, "i").test(ct)) {
+      const mime = customerLogo.ext === "jpg" ? "image/jpeg" : customerLogo.ext === "svg" ? "image/svg+xml" : `image/${customerLogo.ext}`;
+      ct = ct.replace("</Types>", `<Default Extension="${customerLogo.ext}" ContentType="${mime}"/></Types>`);
+      outZip.file("[Content_Types].xml", ct);
+    }
+
+    let docXml = outZip.file("word/document.xml")?.asText() || "";
+    // The whole run that carries the template cover logo (image1.png), matched
+    // without crossing a run boundary; the customer logo is cloned from its
+    // drawing and inserted as a sibling run in the same paragraph.
+    const runRe = /<w:r\b(?:(?!<\/w:r>)[\s\S])*?<w:drawing\b(?:(?!<\/w:r>)[\s\S])*?name="image1\.png"(?:(?!<\/w:r>)[\s\S])*?<\/w:r>/;
+    const runMatch = docXml.match(runRe);
+    const drawing = runMatch?.[0].match(/<w:drawing\b[\s\S]*?<\/w:drawing>/)?.[0];
+    if (runMatch && drawing) {
+      docXml = docXml.replace(runRe, (r) => customerLogoRun(drawing, nextRid) + r);
+      outZip.file("word/document.xml", docXml);
     }
   }
 

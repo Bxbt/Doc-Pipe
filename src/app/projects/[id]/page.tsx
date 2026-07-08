@@ -1,9 +1,10 @@
 import { notFound } from "next/navigation";
 import Link from "next/link";
-import { ArrowLeft, Download, FileText } from "lucide-react";
+import { ArrowLeft, Download } from "lucide-react";
 import { getProjectFull, computeHealth, overallCompletion, missingDocs } from "@/lib/queries";
 import { downstreamOf } from "@/lib/graph";
 import { ProjectWorkspace } from "@/components/ProjectWorkspace";
+import { WordBoiExport } from "@/components/WordBoiExport";
 import { StatusBadge } from "@/components/badges";
 import { formatDate } from "@/lib/utils";
 import { getCurrentUser, canEdit, canAdmin } from "@/lib/auth";
@@ -124,20 +125,7 @@ export default async function ProjectPage({ params }: { params: { id: string } }
           >
             <Download size={14} /> Export
           </a>
-          <a
-            href={`/projects/${project.id}/export/docx`}
-            className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-surface px-3 py-1.5 text-sm hover:bg-surface-2"
-            title="Export as a generic Word .docx (auto-filled revision history)"
-          >
-            <FileText size={14} /> Word
-          </a>
-          <a
-            href={`/projects/${project.id}/export/docx-boi`}
-            className="inline-flex items-center gap-1.5 rounded-lg border border-brand bg-brand/10 px-3 py-1.5 text-sm font-medium text-brand hover:bg-brand/20"
-            title="Export using the real BOI SRS Word template (fills each section from the pipeline)"
-          >
-            <FileText size={14} /> Word (BOI)
-          </a>
+          <WordBoiExport projectId={project.id} />
         </div>
         <div className="flex -space-x-2">
           {members.slice(0, 6).map((m) => (
