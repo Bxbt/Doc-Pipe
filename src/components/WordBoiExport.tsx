@@ -19,7 +19,16 @@ async function svgToPng(svg: string): Promise<string> {
   const vb = svg.match(/viewBox="0 0 ([\d.]+) ([\d.]+)"/);
   const w = Math.max(1, Math.ceil(vb ? +vb[1] : 800));
   const h = Math.max(1, Math.ceil(vb ? +vb[2] : 600));
-  const url = URL.createObjectURL(new Blob([svg], { type: "image/svg+xml;charset=utf-8" }));
+  // mermaid emits width="100%" + a max-width style, which rasterizes to nothing
+  // on a canvas. Force explicit pixel dimensions from the viewBox instead.
+  const open = svg.match(/<svg\b[^>]*>/)?.[0] ?? "";
+  const fixed = open
+    .replace(/\swidth="[^"]*"/, "")
+    .replace(/\sheight="[^"]*"/, "")
+    .replace(/max-width:\s*[\d.]+px;?/, "")
+    .replace(/<svg\b/, `<svg width="${w}" height="${h}"`);
+  const sized = open ? svg.replace(open, fixed) : svg;
+  const url = URL.createObjectURL(new Blob([sized], { type: "image/svg+xml;charset=utf-8" }));
   try {
     const img = new Image();
     img.width = w;
@@ -63,7 +72,16 @@ export function WordBoiExport({ projectId }: { projectId: string }) {
       const images: Record<string, string> = {};
       if (charts.length) {
         const mermaid = await loadMermaid();
-        mermaid.initialize({ startOnLoad: false, securityLevel: "strict", theme: "default" });
+        // htmlLabels:false keeps the SVG free of <foreignObject>, which a canvas
+        // refuses to rasterize (taints it, so toDataURL throws) — that is what
+        // otherwise silently drops every diagram back to code.
+        mermaid.initialize({
+          startOnLoad: false,
+          securityLevel: "strict",
+          theme: "default",
+          htmlLabels: false,
+          flowchart: { htmlLabels: false },
+        });
         for (const c of charts) {
           try {
             const { svg } = await mermaid.render("exp-" + c.hash, c.code);
