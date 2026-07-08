@@ -105,12 +105,42 @@ async function embedImages(html: string): Promise<string> {
   );
 }
 
+// Pixel dimensions straight from the image header (no decoding library). Covers
+// the formats the uploader allows for images; anything unrecognised returns null
+// so the caller falls back to a square box.
+function imageSize(buf: Buffer, ext: string): { w: number; h: number } | null {
+  try {
+    if (ext === "png" && buf.readUInt32BE(0) === 0x89504e47) {
+      return { w: buf.readUInt32BE(16), h: buf.readUInt32BE(20) };
+    }
+    if (ext === "gif") {
+      return { w: buf.readUInt16LE(6), h: buf.readUInt16LE(8) };
+    }
+    if (ext === "jpg") {
+      let o = 2;
+      while (o < buf.length) {
+        if (buf[o] !== 0xff) { o++; continue; }
+        const marker = buf[o + 1];
+        // SOF0–SOF15, excluding the non-dimension DHT/JPG/DAC markers.
+        if (marker >= 0xc0 && marker <= 0xcf && ![0xc4, 0xc8, 0xcc].includes(marker)) {
+          return { h: buf.readUInt16BE(o + 5), w: buf.readUInt16BE(o + 7) };
+        }
+        o += 2 + buf.readUInt16BE(o + 2);
+      }
+    }
+  } catch {
+    /* malformed header — fall back to a square */
+  }
+  return null;
+}
+
 // The customer's logo comes from the project's "Logo" library document — its
 // content is BlockNote HTML holding one attachment image. Return the raw image
-// bytes + extension so it can be dropped onto the cover beside our own logo.
+// bytes + extension and its natural pixel size so it can be seated on the cover
+// beside our own logo at its true aspect ratio.
 async function coverLogoImage(
   docs: { type: string; content: string }[]
-): Promise<{ data: Buffer; ext: string } | null> {
+): Promise<{ data: Buffer; ext: string; w: number; h: number } | null> {
   const doc = docs.find(
     (d) => d.type === "LOGO" || docLabel(d.type).trim().toLowerCase() === "logo"
   );
@@ -122,7 +152,8 @@ async function coverLogoImage(
   try {
     const data = await readFile(storedPath(att.storedName));
     const ext = (att.mime.split("/")[1] || "png").toLowerCase().replace("jpeg", "jpg");
-    return { data, ext };
+    const size = imageSize(data, ext) ?? { w: 1, h: 1 };
+    return { data, ext, w: size.w, h: size.h };
   } catch {
     return null;
   }
@@ -130,10 +161,18 @@ async function coverLogoImage(
 
 // Clone the template's own cover-logo <w:drawing> (a known-good anchored image)
 // and repoint it at the customer logo: new relationship id, unique drawing ids,
-// a fresh name, and a horizontal offset that seats it just left of our logo so
-// the two sit side by side on the same line.
-function customerLogoRun(companyDrawing: string, rid: string): string {
-  const custX = 1668500; // our logo anchors at 3205835 EMU; width is 1423035 → gap to its left
+// a fresh name, its true aspect ratio (fit inside our logo's square box so it
+// never overruns), and a horizontal offset that seats it just left of our logo
+// so the two sit side by side, both right-aligned to the same baseline.
+const LOGO_BOX = 1423035; // our logo's square extent, in EMU
+const COMPANY_X = 3205835; // where our logo anchors from the column
+function customerLogoRun(companyDrawing: string, rid: string, w: number, h: number): string {
+  const scale = LOGO_BOX / Math.max(w, h);
+  const cx = Math.max(1, Math.round(w * scale));
+  const cy = Math.max(1, Math.round(h * scale));
+  // Seat it to the left of our logo with the usual gap, right edge flush so the
+  // two read as a pair regardless of the customer logo's width.
+  const custX = COMPANY_X - 114300 - cx;
   const drawing = companyDrawing
     .replace(/r:embed="rId\d+"/, `r:embed="${rid}"`)
     .replace(
@@ -144,6 +183,8 @@ function customerLogoRun(companyDrawing: string, rid: string): string {
       /(<pic:cNvPr\b[^>]*\bid=")\d+("[^>]*\bname=")[^"]*(")/,
       `$1901002$2customer-logo$3`
     )
+    .replace(/<wp:extent\b[^>]*\/>/, `<wp:extent cx="${cx}" cy="${cy}"/>`)
+    .replace(/<a:ext\b[^>]*\/>/, `<a:ext cx="${cx}" cy="${cy}"/>`)
     .replace(/(<wp:positionH\b[\s\S]*?<wp:posOffset>)-?\d+(<\/wp:posOffset>)/, `$1${custX}$2`);
   return `<w:r><w:rPr><w:noProof/></w:rPr>${drawing}</w:r>`;
 }
@@ -451,7 +492,7 @@ async function buildBoiDocx(id: string, mermaidImages: Record<string, string>) {
     const runMatch = docXml.match(runRe);
     const drawing = runMatch?.[0].match(/<w:drawing\b[\s\S]*?<\/w:drawing>/)?.[0];
     if (runMatch && drawing) {
-      docXml = docXml.replace(runRe, (r) => customerLogoRun(drawing, nextRid) + r);
+      docXml = docXml.replace(runRe, (r) => customerLogoRun(drawing, nextRid, customerLogo.w, customerLogo.h) + r);
       outZip.file("word/document.xml", docXml);
     }
   }
