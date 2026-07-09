@@ -851,3 +851,21 @@ export async function resolveThread(threadId: string, resolved: boolean) {
   revalidatePath(`/projects/${doc.projectId}/documents/${doc.id}`);
   revalidatePath(`/projects/${doc.projectId}`);
 }
+
+// ---------------------------------------------------------------------------
+// Version compare
+// ---------------------------------------------------------------------------
+
+// Word-level HTML diff between two saved versions of a document. Read-only; any
+// signed-in user may compare. Returns diff HTML (with <ins>/<del>) plus each
+// side's version label for the header.
+export async function diffVersions(documentId: string, oldId: string, newId: string) {
+  await getCurrentUser();
+  const [a, b] = await Promise.all([
+    prisma.documentVersion.findFirst({ where: { id: oldId, documentId } }),
+    prisma.documentVersion.findFirst({ where: { id: newId, documentId } }),
+  ]);
+  if (!a || !b) throw new Error("Version not found.");
+  const { computeDiffHtml } = await import("./version-diff");
+  return { html: computeDiffHtml(a.content, b.content), oldVersion: a.version, newVersion: b.version };
+}

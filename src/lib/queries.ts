@@ -178,6 +178,37 @@ export async function getDocumentThreads(documentId: string): Promise<CommentThr
   }));
 }
 
+export type VersionLite = {
+  id: string;
+  version: string;
+  note: string | null;
+  authorName: string | null;
+  createdAt: Date;
+};
+
+// Saved snapshots of a document, newest first — the picker for version compare.
+// Content is left out here (it can be large); the diff action loads it per pair.
+export async function getDocumentVersions(documentId: string): Promise<VersionLite[]> {
+  const rows = await prisma.documentVersion.findMany({
+    where: { documentId },
+    orderBy: { createdAt: "desc" },
+    select: {
+      id: true,
+      version: true,
+      note: true,
+      createdAt: true,
+      author: { select: { name: true } },
+    },
+  });
+  return rows.map((r) => ({
+    id: r.id,
+    version: r.version,
+    note: r.note,
+    authorName: r.author?.name ?? null,
+    createdAt: r.createdAt,
+  }));
+}
+
 // Count of unresolved threads per document — for the comment badge on cards.
 export async function unresolvedThreadCounts(
   documentIds: string[]

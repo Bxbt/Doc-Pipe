@@ -22,7 +22,8 @@ import { AttachmentPanel } from "./AttachmentPanel";
 import { CommentsProvider } from "./CommentsContext";
 import { CommentPanel } from "./CommentPanel";
 import { CommentableDocument } from "./CommentableDocument";
-import type { CommentThreadFull } from "@/lib/queries";
+import { VersionHistory } from "./VersionHistory";
+import type { CommentThreadFull, VersionLite } from "@/lib/queries";
 import { Select } from "./inputs";
 import { useScrollLock } from "./useScrollLock";
 import { StatusBadge } from "./badges";
@@ -71,6 +72,7 @@ export function DocumentDetail({
   allDocs,
   attachments,
   threads,
+  versions,
   currentUser,
   lock,
   perms,
@@ -82,6 +84,7 @@ export function DocumentDetail({
   allDocs: PickDoc[];
   attachments: { id: string; filename: string; mime: string; size: number }[];
   threads: CommentThreadFull[];
+  versions: VersionLite[];
   currentUser: { id: string; name: string };
   lock: { active: boolean; byName: string | null; mine: boolean };
   perms: { canEdit: boolean; canReview: boolean; canAdmin: boolean };
@@ -352,6 +355,7 @@ export function DocumentDetail({
         >
           <Download size={14} /> Export .{isHtml ? "html" : "md"}
         </button>
+        <VersionHistory projectId={projectId} docId={doc.id} versions={versions} />
 
         <div className="ml-auto flex items-center gap-2">
           {perms.canEdit && (
