@@ -337,6 +337,68 @@ function headingSpacing(inner: string): string {
   });
 }
 
+// Mark the first row of every table as a repeating header, so a table that
+// spills onto the next page shows its header row again at the page top
+// (Word's "Repeat as header row"). <w:tblHeader/> lives in the row's <w:trPr>.
+function repeatTableHeaders(docXml: string): string {
+  return docXml.replace(/<w:tbl>[\s\S]*?<\/w:tbl>/g, (tbl) => {
+    // Only the first row. Match its <w:tr ...> and any immediate <w:trPr>…</w:trPr>.
+    return tbl.replace(
+      /<w:tr\b([^>]*)>(\s*<w:trPr>([\s\S]*?)<\/w:trPr>)?/,
+      (_m, attrs: string, trPr: string | undefined, inner: string | undefined) => {
+        if (trPr) {
+          if (/<w:tblHeader\b/.test(inner!)) return _m; // already set
+          // tblHeader is late in the trPr schema order, so append it last.
+          return `<w:tr${attrs}><w:trPr>${inner}<w:tblHeader/></w:trPr>`;
+        }
+        return `<w:tr${attrs}><w:trPr><w:tblHeader/></w:trPr>`;
+      }
+    );
+  });
+}
+
+// BOI table look for content tables (revision + markdown tables) — NOT the
+// template's cover layout tables. Preferred width 16.51cm, #AAAAAA 1/2pt lines
+// on every edge (table + cell borders), and a dark navy header row (first row)
+// with white text.
+const TBL_W_DXA = 9360; // 16.51 cm × 566.93 dxa/cm
+const BORDER = (side: string) => `<w:${side} w:val="single" w:sz="4" w:space="0" w:color="AAAAAA"/>`;
+const TBL_BORDERS = `<w:tblBorders>${["top", "left", "bottom", "right", "insideH", "insideV"]
+  .map(BORDER)
+  .join("")}</w:tblBorders>`;
+const TC_BORDERS = `<w:tcBorders>${["top", "left", "bottom", "right"].map(BORDER).join("")}</w:tcBorders>`;
+const HDR_SHD = `<w:shd w:val="clear" w:color="auto" w:fill="041C4D"/>`;
+const WHITE = `<w:color w:val="FFFFFF"/>`;
+
+function styleHeaderRow(row: string): string {
+  // Shade every cell (shd follows tcBorders in the tcPr schema order).
+  let r = row.replace(/<\/w:tcBorders>/g, `</w:tcBorders>${HDR_SHD}`);
+  // White text on every run.
+  r = r.replace(/<w:rPr\/>/g, `<w:rPr>${WHITE}</w:rPr>`);
+  r = r.replace(/<w:rPr>(?!<\/w:rPr>)([\s\S]*?)<\/w:rPr>/g, (m, inner: string) =>
+    /<w:color\b/.test(inner) ? m : `<w:rPr>${WHITE}${inner}</w:rPr>`
+  );
+  return r;
+}
+
+function styleContentTables(ooxml: string): string {
+  if (!ooxml) return ooxml;
+  return ooxml.replace(/<w:tbl>[\s\S]*?<\/w:tbl>/g, (tbl) => {
+    // tblPr: preferred width + full borders (drop html-to-docx's own defaults).
+    let t = tbl.replace(/<w:tblPr>([\s\S]*?)<\/w:tblPr>/, (_m, inner: string) => {
+      const rest = inner
+        .replace(/<w:tblBorders>[\s\S]*?<\/w:tblBorders>/, "")
+        .replace(/<w:tblW\b[^>]*\/>/, "");
+      return `<w:tblPr><w:tblW w:w="${TBL_W_DXA}" w:type="dxa"/>${TBL_BORDERS}${rest}</w:tblPr>`;
+    });
+    // Recolour every cell's borders.
+    t = t.replace(/<w:tcBorders>[\s\S]*?<\/w:tcBorders>/g, TC_BORDERS);
+    // First row = header: navy fill + white text.
+    t = t.replace(/<w:tr\b[^>]*>[\s\S]*?<\/w:tr>/, styleHeaderRow);
+    return t;
+  });
+}
+
 // Force single (1.0) line spacing on every paragraph of the whole document —
 // preserving any before/after spacing. Applied once to the final document.xml.
 function setSingleLineSpacing(docXml: string): string {
@@ -386,9 +448,9 @@ function styleContentParagraphs(ooxml: string): string {
   const tables: string[] = [];
   let s = ooxml.replace(/<w:tbl>[\s\S]*?<\/w:tbl>/g, (m) => `@@TBL${tables.push(m) - 1}@@`);
   s = s.replace(/<w:p\b([^>]*)>([\s\S]*?)<\/w:p>/g, (full, attrs: string, inner: string) => {
-    // H2 subheadings: space above (none below), thaiDistribute, bold, and the
-    // same 16pt body size (overriding the template's larger Heading2 size).
-    if (/<w:pStyle\b[^>]*w:val="Heading2"/.test(inner)) {
+    // H2/H3 subheadings: space above (none below), thaiDistribute, bold, and the
+    // same 16pt body size (overriding the template's larger heading sizes).
+    if (/<w:pStyle\b[^>]*w:val="Heading[23]"/.test(inner)) {
       let body = ensureThaiDistribute(headingSpacing(inner));
       body = body.replace(/<w:r\b(?:(?!<\/w:r>)[\s\S])*?<\/w:r>/g, (r) => thaiRun(r, true));
       return `<w:p${attrs}>${body}</w:p>`;
@@ -507,10 +569,14 @@ async function buildBoiDocx(id: string, mermaidImages: Record<string, string>) {
   const customerLogo = await coverLogoImage(docs);
 
   const templateData: Record<string, string> = { projectName: project.name };
-  templateData.revisionTable = await renderSimpleOoxml(revisionHtml);
+  // Page break after the revision table so the first content section
+  // ("ที่มาและความสำคัญ") always starts at the top of a fresh page.
+  templateData.revisionTable =
+    styleContentTables(await renderSimpleOoxml(revisionHtml)) +
+    `<w:p><w:r><w:br w:type="page"/></w:r></w:p>`;
   for (const key of SECTION_KEYS) {
     templateData[`body${key}`] = htmlByKey.has(key)
-      ? styleContentParagraphs(merged.bodies.get(key) || "<w:p/>")
+      ? styleContentParagraphs(styleContentTables(merged.bodies.get(key) || "<w:p/>"))
       : NOTE_NO_DOC;
   }
 
@@ -613,7 +679,7 @@ async function buildBoiDocx(id: string, mermaidImages: Record<string, string>) {
   // Normalise the whole document to single (1.0) line spacing.
   {
     const docXml = outZip.file("word/document.xml")?.asText() || "";
-    if (docXml) outZip.file("word/document.xml", setSingleLineSpacing(docXml));
+    if (docXml) outZip.file("word/document.xml", repeatTableHeaders(setSingleLineSpacing(docXml)));
   }
 
   const out: Buffer = outZip.generate({ type: "nodebuffer" });
