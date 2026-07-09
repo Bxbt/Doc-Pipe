@@ -31,7 +31,7 @@ export default async function ProjectPage({ params }: { params: { id: string } }
     getDocTypeOptions(),
   ]);
   if (!data) notFound();
-  const { project, edges } = data;
+  const { project, edges, unresolvedByDoc } = data;
   const docs = project.documents;
   const perms = { canEdit: canEdit(user), canAdmin: canAdmin(user) };
 
@@ -156,6 +156,7 @@ export default async function ProjectPage({ params }: { params: { id: string } }
         businessTypeNames={businessTypes.map((b) => b.name)}
         docTypeOptions={docTypeOptions}
         documents={documentsLite}
+        unresolvedByDoc={unresolvedByDoc}
         nodes={nodes}
         edges={edges}
         health={health}

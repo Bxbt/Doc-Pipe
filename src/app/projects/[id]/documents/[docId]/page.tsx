@@ -7,6 +7,7 @@ import { directDependencies, directDependents } from "@/lib/graph";
 import { DocumentDetail } from "@/components/DocumentDetail";
 import { docLabel, LOCK_TTL_MS } from "@/lib/constants";
 import { getDocTypeOptions } from "@/lib/doc-types";
+import { getDocumentThreads } from "@/lib/queries";
 
 export const dynamic = "force-dynamic";
 
@@ -33,6 +34,8 @@ export default async function DocumentPage({
     }),
     getDocTypeOptions(),
   ]);
+
+  const threads = await getDocumentThreads(params.docId);
 
   // Friendly label for a type — standard types use their built-in name, custom
   // Document Library types (which may be Thai) use their library name.
@@ -100,6 +103,8 @@ export default async function DocumentPage({
           mime: a.mime,
           size: a.size,
         }))}
+        threads={threads}
+        currentUser={{ id: user.id, name: user.name }}
         lock={lock}
         perms={{ canEdit: canEdit(user), canReview: canReview(user), canAdmin: canAdmin(user) }}
       />

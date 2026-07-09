@@ -15,6 +15,7 @@ import {
   Trash2,
   Wand2,
   X,
+  MessageSquare,
 } from "lucide-react";
 import { DependencyGraph, type GraphNode } from "./DependencyGraph";
 import { StatusBadge } from "./badges";
@@ -72,6 +73,8 @@ type Props = {
   // page uses), so a new library document is addable to any project.
   docTypeOptions: { type: string; label: string }[];
   documents: DocLite[];
+  // Unresolved comment-thread count per document id (for the card badge).
+  unresolvedByDoc: Record<string, number>;
   nodes: GraphNode[];
   edges: Edge[];
   health: { label: string; total: number; done: number; pct: number }[];
@@ -229,7 +232,7 @@ function ScaffoldButton({ projectId, full }: { projectId: string; full?: boolean
   );
 }
 
-function Pipeline({ projectId, documents, perms, docTypeOptions }: Props) {
+function Pipeline({ projectId, documents, unresolvedByDoc, perms, docTypeOptions }: Props) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   // Friendly label for a document type. Standard types use their built-in name;
@@ -351,6 +354,14 @@ function Pipeline({ projectId, documents, perms, docTypeOptions }: Props) {
             {d.outdated && (
               <span className="hidden items-center gap-1 text-[11px] text-red-400 sm:inline-flex">
                 <AlertTriangle size={13} /> needs update
+              </span>
+            )}
+            {(unresolvedByDoc[d.id] ?? 0) > 0 && (
+              <span
+                title={`${unresolvedByDoc[d.id]} unresolved comment(s)`}
+                className="inline-flex items-center gap-0.5 rounded-full bg-brand/15 px-1.5 py-0.5 text-[11px] font-medium text-brand"
+              >
+                <MessageSquare size={11} /> {unresolvedByDoc[d.id]}
               </span>
             )}
             <StatusBadge status={d.outdated ? "Outdated" : d.status} />

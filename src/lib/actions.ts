@@ -728,3 +728,126 @@ export async function revokeAccessToken(id: string) {
   await prisma.personalAccessToken.deleteMany({ where: { id, userId: user.id } });
   revalidatePath("/settings");
 }
+
+// ---------------------------------------------------------------------------
+// Comments
+//
+// Any signed-in user (Viewer included) may comment and resolve threads —
+// comments are review feedback, not document edits. Editing or deleting an
+// individual comment is limited to its author, or an Admin.
+// ---------------------------------------------------------------------------
+
+// Add a comment: with a threadId it is a reply (and reopens a resolved thread);
+// without one it starts a new thread — doc-level, or anchored to a content
+// block when anchorBlock/anchorQuote are supplied.
+export async function addComment(
+  projectId: string,
+  documentId: string,
+  input: { threadId?: string; body: string; anchorBlock?: number | null; anchorQuote?: string | null }
+) {
+  const user = await getCurrentUser();
+  const body = input.body.trim();
+  if (!body) throw new Error("Comment cannot be empty.");
+
+  if (input.threadId) {
+    const thread = await prisma.commentThread.findUnique({ where: { id: input.threadId } });
+    if (!thread || thread.documentId !== documentId) throw new Error("Thread not found.");
+    await prisma.comment.create({ data: { threadId: input.threadId, authorId: user.id, body } });
+    if (thread.resolved) {
+      await prisma.commentThread.update({
+        where: { id: thread.id },
+        data: { resolved: false, resolvedById: null, resolvedAt: null },
+      });
+    }
+  } else {
+    await prisma.commentThread.create({
+      data: {
+        documentId,
+        createdById: user.id,
+        anchorBlock: input.anchorBlock ?? null,
+        anchorQuote: input.anchorQuote ?? null,
+        comments: { create: { authorId: user.id, body } },
+      },
+    });
+  }
+
+  await prisma.activity.create({
+    data: { projectId, documentId, userId: user.id, action: "commented", detail: body.slice(0, 80) },
+  });
+  revalidatePath(`/projects/${projectId}/documents/${documentId}`);
+  revalidatePath(`/projects/${projectId}`);
+}
+
+export async function editComment(commentId: string, body: string) {
+  const user = await getCurrentUser();
+  const text = body.trim();
+  if (!text) throw new Error("Comment cannot be empty.");
+  const comment = await prisma.comment.findUnique({
+    where: { id: commentId },
+    include: { thread: { include: { document: { select: { id: true, projectId: true } } } } },
+  });
+  if (!comment) throw new Error("Comment not found.");
+  if (comment.authorId !== user.id && !canAdmin(user)) {
+    throw new Error("You can only edit your own comments.");
+  }
+  await prisma.comment.update({ where: { id: commentId }, data: { body: text, editedAt: new Date() } });
+  const doc = comment.thread.document;
+  revalidatePath(`/projects/${doc.projectId}/documents/${doc.id}`);
+}
+
+export async function deleteComment(commentId: string) {
+  const user = await getCurrentUser();
+  const comment = await prisma.comment.findUnique({
+    where: { id: commentId },
+    include: {
+      thread: {
+        include: {
+          _count: { select: { comments: true } },
+          document: { select: { id: true, projectId: true } },
+        },
+      },
+    },
+  });
+  if (!comment) throw new Error("Comment not found.");
+  if (comment.authorId !== user.id && !canAdmin(user)) {
+    throw new Error("You can only delete your own comments.");
+  }
+  // Deleting the only comment removes the now-empty thread.
+  if (comment.thread._count.comments <= 1) {
+    await prisma.commentThread.delete({ where: { id: comment.threadId } });
+  } else {
+    await prisma.comment.delete({ where: { id: commentId } });
+  }
+  const doc = comment.thread.document;
+  revalidatePath(`/projects/${doc.projectId}/documents/${doc.id}`);
+  revalidatePath(`/projects/${doc.projectId}`);
+}
+
+export async function resolveThread(threadId: string, resolved: boolean) {
+  const user = await getCurrentUser();
+  const thread = await prisma.commentThread.findUnique({
+    where: { id: threadId },
+    include: { document: { select: { id: true, projectId: true, title: true } } },
+  });
+  if (!thread) throw new Error("Thread not found.");
+  await prisma.commentThread.update({
+    where: { id: threadId },
+    data: {
+      resolved,
+      resolvedById: resolved ? user.id : null,
+      resolvedAt: resolved ? new Date() : null,
+    },
+  });
+  const doc = thread.document;
+  await prisma.activity.create({
+    data: {
+      projectId: doc.projectId,
+      documentId: doc.id,
+      userId: user.id,
+      action: resolved ? "resolved_comment" : "reopened_comment",
+      detail: doc.title,
+    },
+  });
+  revalidatePath(`/projects/${doc.projectId}/documents/${doc.id}`);
+  revalidatePath(`/projects/${doc.projectId}`);
+}

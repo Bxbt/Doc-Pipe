@@ -21,10 +21,16 @@ export function Topbar({
   const searchTimer = useRef<ReturnType<typeof setTimeout>>();
 
   // Navigate to the search results for a query. While already on /search we
-  // replace (no history spam per keystroke); otherwise push once.
+  // replace (no history spam per keystroke); otherwise push once. Clearing the
+  // box leaves search (back to where you came from) rather than landing on an
+  // empty "type a query" page.
   function goSearch(raw: string) {
     const q = raw.trim();
-    const url = q ? `/search?q=${encodeURIComponent(q)}` : "/search";
+    if (!q) {
+      if (pathname === "/search") router.back();
+      return;
+    }
+    const url = `/search?q=${encodeURIComponent(q)}`;
     if (pathname === "/search") router.replace(url);
     else router.push(url);
   }

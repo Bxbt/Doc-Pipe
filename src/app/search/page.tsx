@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { redirect } from "next/navigation";
 import { prisma } from "@/lib/db";
 import { PageHeader, Card, EmptyState } from "@/components/ui";
 import { StatusBadge } from "@/components/badges";
@@ -13,14 +14,9 @@ export default async function SearchPage({
 }) {
   const q = (searchParams.q ?? "").trim();
 
-  if (!q) {
-    return (
-      <div>
-        <PageHeader title="Search" />
-        <EmptyState title="Type a query in the top bar to search." />
-      </div>
-    );
-  }
+  // No query (e.g. the search box was cleared) — there's nothing to show, so
+  // go back to the dashboard rather than a "type a query" dead end.
+  if (!q) redirect("/");
 
   const [projects, documents] = await Promise.all([
     prisma.project.findMany({

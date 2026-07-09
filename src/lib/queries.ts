@@ -121,5 +121,74 @@ export async function getProjectFull(projectId: string) {
     targetId: d.targetId,
   }));
 
-  return { project, edges };
+  const unresolvedByDoc = await unresolvedThreadCounts(project.documents.map((d) => d.id));
+
+  return { project, edges, unresolvedByDoc };
+}
+
+export type CommentThreadFull = {
+  id: string;
+  anchorBlock: number | null;
+  anchorQuote: string | null;
+  resolved: boolean;
+  resolvedByName: string | null;
+  createdByName: string;
+  createdAt: Date;
+  comments: {
+    id: string;
+    body: string;
+    authorId: string;
+    authorName: string;
+    editedAt: Date | null;
+    createdAt: Date;
+  }[];
+};
+
+// All comment threads on a document (both doc-level and block-anchored), oldest
+// first, each with its comments and the display names the UI needs.
+export async function getDocumentThreads(documentId: string): Promise<CommentThreadFull[]> {
+  const threads = await prisma.commentThread.findMany({
+    where: { documentId },
+    orderBy: { createdAt: "asc" },
+    include: {
+      createdBy: { select: { name: true } },
+      resolvedBy: { select: { name: true } },
+      comments: {
+        orderBy: { createdAt: "asc" },
+        include: { author: { select: { id: true, name: true } } },
+      },
+    },
+  });
+  return threads.map((t) => ({
+    id: t.id,
+    anchorBlock: t.anchorBlock,
+    anchorQuote: t.anchorQuote,
+    resolved: t.resolved,
+    resolvedByName: t.resolvedBy?.name ?? null,
+    createdByName: t.createdBy?.name ?? "",
+    createdAt: t.createdAt,
+    comments: t.comments.map((c) => ({
+      id: c.id,
+      body: c.body,
+      authorId: c.authorId,
+      authorName: c.author?.name ?? "",
+      editedAt: c.editedAt,
+      createdAt: c.createdAt,
+    })),
+  }));
+}
+
+// Count of unresolved threads per document — for the comment badge on cards.
+export async function unresolvedThreadCounts(
+  documentIds: string[]
+): Promise<Record<string, number>> {
+  if (documentIds.length === 0) return {};
+  const grouped = await prisma.commentThread.groupBy({
+    by: ["documentId"],
+    where: { documentId: { in: documentIds }, resolved: false },
+    _count: { _all: true },
+  });
+  const out: Record<string, number> = {};
+  for (const g of grouped) out[g.documentId] = g._count._all;
+  return out;
 }

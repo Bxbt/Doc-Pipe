@@ -22,6 +22,8 @@ model User {
   documentsEdited Document[]      @relation("DocumentUpdatedBy")
   memberships     ProjectMember[]
   comments        Comment[]
+  threadsCreated  CommentThread[] @relation("ThreadCreatedBy")
+  threadsResolved CommentThread[] @relation("ThreadResolvedBy")
   activities      Activity[]
   versions        DocumentVersion[]
   attachments     Attachment[]
@@ -112,7 +114,7 @@ model Document {
   // Edges where this document depends on an upstream source.
   incoming DocumentDependency[] @relation("TargetDoc")
 
-  comments Comment[]
+  threads  CommentThread[]
   versions DocumentVersion[]
   attachments Attachment[]
   activities Activity[]
@@ -172,17 +174,43 @@ model DocumentVersion {
   @@index([documentId])
 }
 
-model Comment {
+// A comment thread on a document. Doc-level when anchorBlock is null; otherwise
+// it is anchored to a content block (a section/paragraph) in the read view.
+model CommentThread {
   id         String   @id @default(cuid())
   documentId String
-  authorId   String
-  body       String
-  createdAt  DateTime @default(now())
+  // Index of the anchored top-level block in the rendered content, and a short
+  // text snippet of it. The snippet re-anchors the thread if blocks shift; a
+  // thread that matches neither is shown in the panel as "orphaned".
+  anchorBlock Int?
+  anchorQuote String?
+  resolved    Boolean  @default(false)
+  resolvedById String?
+  resolvedAt   DateTime?
+  createdById  String
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
 
-  document Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
-  author   User     @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  document   Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  createdBy  User     @relation("ThreadCreatedBy", fields: [createdById], references: [id])
+  resolvedBy User?    @relation("ThreadResolvedBy", fields: [resolvedById], references: [id])
+  comments   Comment[]
 
   @@index([documentId])
+}
+
+model Comment {
+  id        String   @id @default(cuid())
+  threadId  String
+  authorId  String
+  body      String
+  editedAt  DateTime?
+  createdAt DateTime @default(now())
+
+  thread CommentThread @relation(fields: [threadId], references: [id], onDelete: Cascade)
+  author User          @relation(fields: [authorId], references: [id], onDelete: Cascade)
+
+  @@index([threadId])
 }
 
 model Template {

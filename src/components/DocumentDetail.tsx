@@ -18,8 +18,11 @@ import {
   ArrowDownRight,
   Lock,
 } from "lucide-react";
-import { Markdown } from "./Markdown";
 import { AttachmentPanel } from "./AttachmentPanel";
+import { CommentsProvider } from "./CommentsContext";
+import { CommentPanel } from "./CommentPanel";
+import { CommentableDocument } from "./CommentableDocument";
+import type { CommentThreadFull } from "@/lib/queries";
 import { Select } from "./inputs";
 import { useScrollLock } from "./useScrollLock";
 import { StatusBadge } from "./badges";
@@ -67,6 +70,8 @@ export function DocumentDetail({
   downstream,
   allDocs,
   attachments,
+  threads,
+  currentUser,
   lock,
   perms,
 }: {
@@ -76,6 +81,8 @@ export function DocumentDetail({
   downstream: RelDoc[];
   allDocs: PickDoc[];
   attachments: { id: string; filename: string; mime: string; size: number }[];
+  threads: CommentThreadFull[];
+  currentUser: { id: string; name: string };
   lock: { active: boolean; byName: string | null; mine: boolean };
   perms: { canEdit: boolean; canReview: boolean; canAdmin: boolean };
 }) {
@@ -377,43 +384,52 @@ export function DocumentDetail({
         </div>
       </div>
 
-      <div className="grid gap-5 lg:grid-cols-[1fr_240px]">
-        {/* content */}
-        <div className="rounded-xl border border-border bg-surface p-6">
-          {editing ? (
-            <BlockEditor docId={doc.id} initialMarkdown={doc.content} onChange={setDraft} />
-          ) : (
-            <Markdown>{doc.content || "_No content yet._"}</Markdown>
-          )}
-        </div>
+      <CommentsProvider
+        projectId={projectId}
+        docId={doc.id}
+        threads={threads}
+        currentUser={currentUser}
+        canAdmin={perms.canAdmin}
+      >
+        <div className="grid gap-5 lg:grid-cols-[1fr_240px]">
+          {/* content */}
+          <div className="rounded-xl border border-border bg-surface p-6">
+            {editing ? (
+              <BlockEditor docId={doc.id} initialMarkdown={doc.content} onChange={setDraft} />
+            ) : (
+              <CommentableDocument content={doc.content} />
+            )}
+          </div>
 
-        {/* related docs */}
-        <div className="flex flex-col gap-4">
-          <RelatedPanel
-            title="Depends on"
-            icon={<ArrowUpRight size={13} />}
-            projectId={projectId}
-            docId={doc.id}
-            direction="upstream"
-            docs={upstream}
-            allDocs={allDocs}
-            canEdit={perms.canEdit}
-            empty="No upstream documents"
-          />
-          <RelatedPanel
-            title="Impacts"
-            icon={<ArrowDownRight size={13} />}
-            projectId={projectId}
-            docId={doc.id}
-            direction="downstream"
-            docs={downstream}
-            allDocs={allDocs}
-            canEdit={perms.canEdit}
-            empty="No downstream documents"
-          />
-          <AttachmentPanel docId={doc.id} attachments={attachments} canEdit={perms.canEdit} />
+          {/* related docs + comments */}
+          <div className="flex flex-col gap-4">
+            <RelatedPanel
+              title="Depends on"
+              icon={<ArrowUpRight size={13} />}
+              projectId={projectId}
+              docId={doc.id}
+              direction="upstream"
+              docs={upstream}
+              allDocs={allDocs}
+              canEdit={perms.canEdit}
+              empty="No upstream documents"
+            />
+            <RelatedPanel
+              title="Impacts"
+              icon={<ArrowDownRight size={13} />}
+              projectId={projectId}
+              docId={doc.id}
+              direction="downstream"
+              docs={downstream}
+              allDocs={allDocs}
+              canEdit={perms.canEdit}
+              empty="No downstream documents"
+            />
+            <CommentPanel />
+            <AttachmentPanel docId={doc.id} attachments={attachments} canEdit={perms.canEdit} />
+          </div>
         </div>
-      </div>
+      </CommentsProvider>
     </div>
   );
 }

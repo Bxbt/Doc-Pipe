@@ -142,6 +142,23 @@ body {
   font-size: 1.05rem !important;
 }
 
+/* BlockNote sizes the side menu (drag handle + "+") to a fixed height per
+   heading level, centring the buttons on that box — but those heights are
+   calibrated to BlockNote's default heading sizes (h1 = 3em). Since we shrink
+   headings above, the box is too tall and the buttons sag below the text.
+   Recompute each height to match (2·padding-top(18px) + line box @1.7). */
+.bn-wrap .bn-side-menu[data-block-type="heading"][data-level="1"] { height: 77px; }
+.bn-wrap .bn-side-menu[data-block-type="heading"][data-level="2"] { height: 69px; }
+.bn-wrap .bn-side-menu[data-block-type="heading"][data-level="3"] { height: 65px; }
+
+/* Highlight the content block a selected comment thread is anchored to. */
+.prose-doc > .comment-block-active {
+  background: rgb(var(--brand) / 0.08);
+  box-shadow: inset 3px 0 0 rgb(var(--brand));
+  border-radius: 4px;
+  transition: background 0.2s;
+}
+
 /* Document Library modal: scroll the editor content internally so the modal
    body doesn't need overflow — otherwise it clips BlockNote's absolutely
    positioned slash/+ menu. The menu is a sibling of .bn-editor, so its own
