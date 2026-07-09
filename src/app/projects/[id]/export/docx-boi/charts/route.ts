@@ -1,7 +1,7 @@
 import { getCurrentUser } from "@/lib/auth";
 import { getProjectFull } from "@/lib/queries";
 import { extractMermaidCharts } from "@/lib/mermaid-export";
-import { contentToHtml } from "../route";
+import { contentToHtml } from "@/lib/boi-content";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";

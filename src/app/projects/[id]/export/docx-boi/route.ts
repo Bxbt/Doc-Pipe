@@ -1,7 +1,5 @@
 import { readFile } from "node:fs/promises";
 import path from "node:path";
-import { micromark } from "micromark";
-import { gfm, gfmHtml } from "micromark-extension-gfm";
 import HTMLtoDOCX from "html-to-docx";
 import JSZip from "jszip";
 import PizZip from "pizzip";
@@ -13,6 +11,7 @@ import { docLabel } from "@/lib/constants";
 import { storedPath } from "@/lib/storage";
 import { formatDate } from "@/lib/utils";
 import { swapMermaidImages } from "@/lib/mermaid-export";
+import { contentToHtml } from "@/lib/boi-content";
 
 // Phase 2 — export a project using the REAL BOI SRS Word template as the format
 // layer. The template (public/boi/SRS_Template.tagged.docx) keeps its cover,
@@ -64,20 +63,6 @@ function esc(s: string): string {
   return s.replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]!));
 }
 
-export function contentToHtml(content: string): string {
-  if (!content?.trim()) return "";
-  let html: string;
-  try {
-    html = /^\s*</.test(content)
-      ? content
-      : micromark(content, { allowDangerousHtml: true, extensions: [gfm()], htmlExtensions: [gfmHtml()] });
-  } catch {
-    return "";
-  }
-  // The template already provides each section's heading, and Doc-Pipe content
-  // often opens with its own duplicate <h1> — drop a single leading heading.
-  return html.replace(/^\s*<h1[^>]*>[\s\S]*?<\/h1>/i, "").trim();
-}
 
 // Inline attachment images as base64 data URIs so html-to-docx actually embeds
 // them (the /api/attachments/<id> URLs aren't reachable). A non-image or missing
@@ -308,6 +293,132 @@ async function renderSectionsMerged(htmlByKey: Map<string, string>, off: Offsets
   return { bodies, abstracts, nums, media, relsAppend: appendRels.join("") };
 }
 
+const TH_FONT = "TH Sarabun New";
+
+// Tag a run as Thai body text: TH Sarabun New for Latin + complex-script,
+// 16pt, and the <w:cs/> complex-script flag. Without <w:cs/> Word treats Thai
+// as one unbreakable word (it only wraps at spaces, leaving big gaps) and falls
+// back to the template's Times New Roman default. rPr child order matters, so
+// rFonts goes first and cs last.
+function thaiRun(run: string, bold = false): string {
+  const rFonts = `<w:rFonts w:ascii="${TH_FONT}" w:hAnsi="${TH_FONT}" w:cs="${TH_FONT}"/>`;
+  const b = bold ? "<w:b/><w:bCs/>" : "";
+  const size = '<w:sz w:val="32"/><w:szCs w:val="32"/>';
+  if (/<w:rPr>/.test(run)) {
+    return run.replace(/<w:rPr>([\s\S]*?)<\/w:rPr>/, (_m, body: string) => {
+      // rPr child order: rFonts, b, bCs, …, sz, szCs, …, cs.
+      const prefix = (/<w:rFonts\b/.test(body) ? "" : rFonts) + (bold && !/<w:b\b/.test(body) ? b : "");
+      let bb = prefix + body;
+      if (!/<w:sz\b/.test(bb)) bb += size;
+      if (!/<w:cs\s*\/>/.test(bb)) bb += "<w:cs/>";
+      return `<w:rPr>${bb}</w:rPr>`;
+    });
+  }
+  return run.replace(/(<w:r\b[^>]*>)/, `$1<w:rPr>${rFonts}${b}${size}<w:cs/></w:rPr>`);
+}
+
+// Give an H2 heading space above and none below (merge into its <w:spacing>,
+// or add one right after the <w:pStyle>). Line height is set globally later.
+function headingSpacing(inner: string): string {
+  const BEFORE = 'w:before="240"';
+  const AFTER = 'w:after="0"';
+  return inner.replace(/<w:pPr>([\s\S]*?)<\/w:pPr>/, (_m, b: string) => {
+    if (/<w:spacing\b/.test(b)) {
+      b = b.replace(/<w:spacing\b([^>]*?)\/?>/, (_s, a: string) => {
+        const kept = a.replace(/\s*w:before="[^"]*"/, "").replace(/\s*w:after="[^"]*"/, "");
+        return `<w:spacing${kept} ${BEFORE} ${AFTER}/>`;
+      });
+    } else if (/<w:pStyle\b[^>]*\/>/.test(b)) {
+      b = b.replace(/(<w:pStyle\b[^>]*\/>)/, `$1<w:spacing ${BEFORE} ${AFTER}/>`);
+    } else {
+      b = `<w:spacing ${BEFORE} ${AFTER}/>` + b;
+    }
+    return `<w:pPr>${b}</w:pPr>`;
+  });
+}
+
+// Force single (1.0) line spacing on every paragraph of the whole document —
+// preserving any before/after spacing. Applied once to the final document.xml.
+function setSingleLineSpacing(docXml: string): string {
+  const LINE = 'w:line="240" w:lineRule="auto"';
+  return docXml.replace(/<w:pPr>([\s\S]*?)<\/w:pPr>/g, (_m, b: string) => {
+    if (/<w:spacing\b/.test(b)) {
+      b = b.replace(/<w:spacing\b([^>]*?)\/?>/, (_s, a: string) => {
+        const kept = a.replace(/\s*w:line="[^"]*"/, "").replace(/\s*w:lineRule="[^"]*"/, "");
+        return `<w:spacing${kept} ${LINE}/>`;
+      });
+    } else {
+      // Insert before ind/jc/rPr (all of which follow spacing in the schema);
+      // anything earlier — pStyle, numPr — stays ahead of it.
+      const at = b.match(/<w:ind\b|<w:jc\b|<w:rPr>/);
+      const sp = `<w:spacing ${LINE}/>`;
+      b = at ? b.slice(0, at.index) + sp + b.slice(at.index!) : b + sp;
+    }
+    return `<w:pPr>${b}</w:pPr>`;
+  });
+}
+
+// Ensure a paragraph's pPr justifies as thaiDistribute (replacing any existing
+// alignment). jc follows ind and precedes the paragraph-mark rPr in the schema.
+function ensureThaiDistribute(inner: string): string {
+  const JC = '<w:jc w:val="thaiDistribute"/>';
+  if (/<w:pPr>/.test(inner)) {
+    return inner.replace(/<w:pPr>([\s\S]*?)<\/w:pPr>/, (_m, b: string) => {
+      const cleaned = b.replace(/<w:jc\b[^>]*\/>/g, "");
+      const at = cleaned.match(/<w:rPr>/);
+      const bb = at ? cleaned.slice(0, at.index) + JC + cleaned.slice(at.index) : cleaned + JC;
+      return `<w:pPr>${bb}</w:pPr>`;
+    });
+  }
+  return `<w:pPr>${JC}</w:pPr>${inner}`;
+}
+
+// Give each body content paragraph the Thai document look: thaiDistribute
+// justification, a first-line indent (720 twips ≈ one tab), and Thai-tagged
+// runs (font + complex-script wrapping). Only plain text paragraphs are
+// touched — headings (pStyle), list items (numPr), image blocks (drawing),
+// and everything inside a table are left as-is.
+function styleContentParagraphs(ooxml: string): string {
+  if (!ooxml) return ooxml;
+  const IND = '<w:ind w:firstLine="720"/>';
+  const JC = '<w:jc w:val="thaiDistribute"/>';
+  // Protect tables so cell paragraphs don't get a first-line indent.
+  const tables: string[] = [];
+  let s = ooxml.replace(/<w:tbl>[\s\S]*?<\/w:tbl>/g, (m) => `@@TBL${tables.push(m) - 1}@@`);
+  s = s.replace(/<w:p\b([^>]*)>([\s\S]*?)<\/w:p>/g, (full, attrs: string, inner: string) => {
+    // H2 subheadings: space above (none below), thaiDistribute, bold, and the
+    // same 16pt body size (overriding the template's larger Heading2 size).
+    if (/<w:pStyle\b[^>]*w:val="Heading2"/.test(inner)) {
+      let body = ensureThaiDistribute(headingSpacing(inner));
+      body = body.replace(/<w:r\b(?:(?!<\/w:r>)[\s\S])*?<\/w:r>/g, (r) => thaiRun(r, true));
+      return `<w:p${attrs}>${body}</w:p>`;
+    }
+    // Bullet / numbered list items: thaiDistribute + Thai-tagged runs, but keep
+    // their numPr indent (no first-line indent).
+    if (/<w:numPr\b/.test(inner)) {
+      if (!/<w:t[\s>]/.test(inner)) return full;
+      let body = ensureThaiDistribute(inner);
+      body = body.replace(/<w:r\b(?:(?!<\/w:r>)[\s\S])*?<\/w:r>/g, (r) => thaiRun(r));
+      return `<w:p${attrs}>${body}</w:p>`;
+    }
+    if (/<w:pStyle\b/.test(inner) || /<w:drawing\b/.test(inner)) return full;
+    if (!/<w:t[\s>]/.test(inner)) return full; // structural/empty paragraph
+    // Thai-tag every run so wrapping + font are correct.
+    let body = inner.replace(/<w:r\b(?:(?!<\/w:r>)[\s\S])*?<\/w:r>/g, (r) => thaiRun(r));
+    // Set alignment + first-line indent (schema wants <w:ind> before <w:jc>).
+    if (/<w:pPr>/.test(body)) {
+      body = body.replace(/<w:pPr>([\s\S]*?)<\/w:pPr>/, (_m, ppr: string) => {
+        const cleaned = ppr.replace(/<w:jc\b[^>]*\/>/g, "").replace(/<w:ind\b[^>]*\/>/g, "");
+        return `<w:pPr>${cleaned}${IND}${JC}</w:pPr>`;
+      });
+    } else {
+      body = `<w:pPr>${IND}${JC}</w:pPr>${body}`;
+    }
+    return `<w:p${attrs}>${body}</w:p>`;
+  });
+  return s.replace(/@@TBL(\d+)@@/g, (_m, i) => tables[+i]);
+}
+
 const statusText = (s: string, outdated: boolean) =>
   outdated ? "Outdated" : s === "InReview" ? "In Review" : s;
 
@@ -398,7 +509,9 @@ async function buildBoiDocx(id: string, mermaidImages: Record<string, string>) {
   const templateData: Record<string, string> = { projectName: project.name };
   templateData.revisionTable = await renderSimpleOoxml(revisionHtml);
   for (const key of SECTION_KEYS) {
-    templateData[`body${key}`] = htmlByKey.has(key) ? merged.bodies.get(key) || "<w:p/>" : NOTE_NO_DOC;
+    templateData[`body${key}`] = htmlByKey.has(key)
+      ? styleContentParagraphs(merged.bodies.get(key) || "<w:p/>")
+      : NOTE_NO_DOC;
   }
 
   const templateBuf = await readFile(boiTemplatePath());
@@ -495,6 +608,12 @@ async function buildBoiDocx(id: string, mermaidImages: Record<string, string>) {
       docXml = docXml.replace(runRe, (r) => customerLogoRun(drawing, nextRid, customerLogo.w, customerLogo.h) + r);
       outZip.file("word/document.xml", docXml);
     }
+  }
+
+  // Normalise the whole document to single (1.0) line spacing.
+  {
+    const docXml = outZip.file("word/document.xml")?.asText() || "";
+    if (docXml) outZip.file("word/document.xml", setSingleLineSpacing(docXml));
   }
 
   const out: Buffer = outZip.generate({ type: "nodebuffer" });
