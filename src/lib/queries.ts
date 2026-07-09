@@ -191,7 +191,10 @@ export type VersionLite = {
 export async function getDocumentVersions(documentId: string): Promise<VersionLite[]> {
   const rows = await prisma.documentVersion.findMany({
     where: { documentId },
-    orderBy: { createdAt: "desc" },
+    // id (cuid) is monotonic, so it breaks createdAt ties deterministically —
+    // otherwise two versions saved in the same millisecond can order randomly
+    // and the default old→new pairing flips.
+    orderBy: [{ createdAt: "desc" }, { id: "desc" }],
     select: {
       id: true,
       version: true,

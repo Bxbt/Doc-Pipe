@@ -92,6 +92,11 @@ export function DocumentDetail({
   const router = useRouter();
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(doc.content);
+  // Initial content the editor mounts with. Normally the live doc; a restore
+  // seeds it with an old version instead. `editorKey` forces BlockEditor to
+  // remount so it re-parses the new seed (it only reads initialMarkdown once).
+  const [editorSeed, setEditorSeed] = useState(doc.content);
+  const [editorKey, setEditorKey] = useState(0);
   // Save opens a modal to choose the save kind (normal vs minor edit).
   const [saveModalOpen, setSaveModalOpen] = useState(false);
   const [isPending, startTransition] = useTransition();
@@ -115,7 +120,26 @@ export function DocumentDetail({
     startTransition(async () => {
       const res = await acquireEditLock(doc.id);
       if (res.ok) {
+        setEditorSeed(doc.content);
+        setEditorKey((k) => k + 1);
         setDraft(doc.content);
+        setEditing(true);
+      } else {
+        setLockedBy(res.lockedBy);
+      }
+    });
+  }
+
+  // Restore-into-editor: acquire the lock, then open the editor seeded with an
+  // old version's content. The user reviews and saves normally, so it flows
+  // through the usual version bump + downstream ripple — no silent overwrite.
+  function restoreInto(content: string) {
+    startTransition(async () => {
+      const res = await acquireEditLock(doc.id);
+      if (res.ok) {
+        setEditorSeed(content);
+        setEditorKey((k) => k + 1);
+        setDraft(content);
         setEditing(true);
       } else {
         setLockedBy(res.lockedBy);
@@ -355,7 +379,12 @@ export function DocumentDetail({
         >
           <Download size={14} /> Export .{isHtml ? "html" : "md"}
         </button>
-        <VersionHistory projectId={projectId} docId={doc.id} versions={versions} />
+        <VersionHistory
+          projectId={projectId}
+          docId={doc.id}
+          versions={versions}
+          onRestore={perms.canEdit && !editing ? restoreInto : undefined}
+        />
 
         <div className="ml-auto flex items-center gap-2">
           {perms.canEdit && (
@@ -399,7 +428,7 @@ export function DocumentDetail({
           {/* content */}
           <div className="rounded-xl border border-border bg-surface p-6">
             {editing ? (
-              <BlockEditor docId={doc.id} initialMarkdown={doc.content} onChange={setDraft} />
+              <BlockEditor key={editorKey} docId={doc.id} initialMarkdown={editorSeed} onChange={setDraft} />
             ) : (
               <CommentableDocument content={doc.content} />
             )}

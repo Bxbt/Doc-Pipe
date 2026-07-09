@@ -869,3 +869,13 @@ export async function diffVersions(documentId: string, oldId: string, newId: str
   const { computeDiffHtml } = await import("./version-diff");
   return { html: computeDiffHtml(a.content, b.content), oldVersion: a.version, newVersion: b.version };
 }
+
+// Content of a single saved version — for "restore into editor" (the caller
+// loads it into the editor and saves normally, so restore goes through the
+// usual version-bump + downstream-ripple, and never overwrites silently).
+export async function getVersionContent(documentId: string, versionId: string): Promise<string> {
+  await getCurrentUser();
+  const v = await prisma.documentVersion.findFirst({ where: { id: versionId, documentId } });
+  if (!v) throw new Error("Version not found.");
+  return v.content;
+}

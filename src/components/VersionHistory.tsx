@@ -1,8 +1,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { History, X, AlignLeft, Columns2, Loader2 } from "lucide-react";
-import { diffVersions } from "@/lib/actions";
+import { History, X, AlignLeft, Columns2, Loader2, Undo2 } from "lucide-react";
+import { diffVersions, getVersionContent } from "@/lib/actions";
 import { useScrollLock } from "./useScrollLock";
 import { formatDate } from "@/lib/utils";
 import { cn } from "@/lib/utils";
@@ -16,10 +16,14 @@ export function VersionHistory({
   projectId,
   docId,
   versions,
+  onRestore,
 }: {
   projectId: string;
   docId: string;
   versions: VersionLite[];
+  // When provided (editable + not already editing), the modal offers to restore
+  // a version into the editor. Undefined hides the restore control.
+  onRestore?: (content: string) => void;
 }) {
   const [open, setOpen] = useState(false);
   useScrollLock(open);
@@ -35,7 +39,15 @@ export function VersionHistory({
       >
         <History size={14} /> History
       </button>
-      {open && <CompareModal projectId={projectId} docId={docId} versions={versions} onClose={() => setOpen(false)} />}
+      {open && (
+        <CompareModal
+          projectId={projectId}
+          docId={docId}
+          versions={versions}
+          onRestore={onRestore}
+          onClose={() => setOpen(false)}
+        />
+      )}
     </>
   );
 }
@@ -43,13 +55,16 @@ export function VersionHistory({
 function CompareModal({
   docId,
   versions,
+  onRestore,
   onClose,
 }: {
   projectId: string;
   docId: string;
   versions: VersionLite[];
+  onRestore?: (content: string) => void;
   onClose: () => void;
 }) {
+  const [restoring, setRestoring] = useState(false);
   // Default: newest vs the one before it.
   const [newId, setNewId] = useState(versions[0]?.id ?? "");
   const [oldId, setOldId] = useState(versions[1]?.id ?? versions[0]?.id ?? "");
@@ -74,6 +89,16 @@ function CompareModal({
       .finally(() => !cancelled && setLoading(false));
     return () => { cancelled = true; };
   }, [docId, oldId, newId]);
+
+  function doRestore() {
+    if (!onRestore || !oldId) return;
+    if (!confirm(`Restore ${labels.oldV || "this version"} into the editor? You'll review and save it as a new version.`)) return;
+    setRestoring(true);
+    getVersionContent(docId, oldId)
+      .then((c) => { onRestore(c); onClose(); })
+      .catch((e) => setError(e instanceof Error ? e.message : "Restore failed"))
+      .finally(() => setRestoring(false));
+  }
 
   const opt = (v: VersionLite) =>
     `${v.version} · ${v.note ?? "—"} · ${formatDate(v.createdAt)}${v.authorName ? ` · ${v.authorName}` : ""}`;
@@ -130,6 +155,18 @@ function CompareModal({
         <div className="flex items-center gap-4 border-b border-border px-3 py-1.5 text-[11px] text-muted">
           <span><span className="rounded bg-emerald-500/20 px-1 text-emerald-300">added</span> in {labels.newV || "newer"}</span>
           <span><span className="rounded bg-red-500/20 px-1 text-red-300 line-through">removed</span> from {labels.oldV || "older"}</span>
+          {onRestore && oldId !== newId && (
+            <button
+              type="button"
+              onClick={doRestore}
+              disabled={restoring}
+              className="ml-auto inline-flex items-center gap-1 rounded-md border border-border px-2 py-0.5 text-[11px] text-fg hover:bg-surface-2 disabled:opacity-50"
+              title={`Load ${labels.oldV || "this version"} into the editor to review and save`}
+            >
+              {restoring ? <Loader2 size={11} className="animate-spin" /> : <Undo2 size={11} />}
+              Restore {labels.oldV || "older"}
+            </button>
+          )}
         </div>
 
         {/* Body */}
