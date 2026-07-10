@@ -300,21 +300,26 @@ const TH_FONT = "TH Sarabun New";
 // as one unbreakable word (it only wraps at spaces, leaving big gaps) and falls
 // back to the template's Times New Roman default. rPr child order matters, so
 // rFonts goes first and cs last.
-function thaiRun(run: string, bold = false): string {
+function thaiRun(run: string, bold = false, autoColor = false): string {
   const rFonts = `<w:rFonts w:ascii="${TH_FONT}" w:hAnsi="${TH_FONT}" w:cs="${TH_FONT}"/>`;
   const b = bold ? "<w:b/><w:bCs/>" : "";
+  // Force black/auto text — overrides the template heading style's blue color.
+  const color = autoColor ? '<w:color w:val="auto"/>' : "";
   const size = '<w:sz w:val="32"/><w:szCs w:val="32"/>';
   if (/<w:rPr>/.test(run)) {
     return run.replace(/<w:rPr>([\s\S]*?)<\/w:rPr>/, (_m, body: string) => {
-      // rPr child order: rFonts, b, bCs, …, sz, szCs, …, cs.
-      const prefix = (/<w:rFonts\b/.test(body) ? "" : rFonts) + (bold && !/<w:b\b/.test(body) ? b : "");
+      // rPr child order: rFonts, b, bCs, …, color, sz, szCs, …, cs.
+      const prefix =
+        (/<w:rFonts\b/.test(body) ? "" : rFonts) +
+        (bold && !/<w:b\b/.test(body) ? b : "") +
+        (autoColor && !/<w:color\b/.test(body) ? color : "");
       let bb = prefix + body;
       if (!/<w:sz\b/.test(bb)) bb += size;
       if (!/<w:cs\s*\/>/.test(bb)) bb += "<w:cs/>";
       return `<w:rPr>${bb}</w:rPr>`;
     });
   }
-  return run.replace(/(<w:r\b[^>]*>)/, `$1<w:rPr>${rFonts}${b}${size}<w:cs/></w:rPr>`);
+  return run.replace(/(<w:r\b[^>]*>)/, `$1<w:rPr>${rFonts}${b}${color}${size}<w:cs/></w:rPr>`);
 }
 
 // Give an H2 heading space above and none below (merge into its <w:spacing>,
@@ -448,11 +453,12 @@ function styleContentParagraphs(ooxml: string): string {
   const tables: string[] = [];
   let s = ooxml.replace(/<w:tbl>[\s\S]*?<\/w:tbl>/g, (m) => `@@TBL${tables.push(m) - 1}@@`);
   s = s.replace(/<w:p\b([^>]*)>([\s\S]*?)<\/w:p>/g, (full, attrs: string, inner: string) => {
-    // H2/H3 subheadings: space above (none below), thaiDistribute, bold, and the
+    // H2/H3 subheadings: space above (none below), thaiDistribute, bold, auto
+    // (black) color — overriding the template heading style's blue — and the
     // same 16pt body size (overriding the template's larger heading sizes).
     if (/<w:pStyle\b[^>]*w:val="Heading[23]"/.test(inner)) {
       let body = ensureThaiDistribute(headingSpacing(inner));
-      body = body.replace(/<w:r\b(?:(?!<\/w:r>)[\s\S])*?<\/w:r>/g, (r) => thaiRun(r, true));
+      body = body.replace(/<w:r\b(?:(?!<\/w:r>)[\s\S])*?<\/w:r>/g, (r) => thaiRun(r, true, true));
       return `<w:p${attrs}>${body}</w:p>`;
     }
     // Bullet / numbered list items: thaiDistribute + Thai-tagged runs, but keep
@@ -684,11 +690,31 @@ async function buildBoiDocx(id: string, mermaidImages: Record<string, string>) {
 
   const out: Buffer = outZip.generate({ type: "nodebuffer" });
 
-  const filenameBase = project.name.replace(/[^\w.-]+/g, "_").replace(/^_+|_+$/g, "") || "project";
+  // Filename: SRS_{ProjectName}_YYMMDD.docx — date in Thailand time (Asia/Bangkok)
+  // so the day rolls over at local midnight. Project name keeps spaces/Thai;
+  // only filesystem-illegal chars are dropped.
+  const bkk = Object.fromEntries(
+    new Intl.DateTimeFormat("en-US", {
+      timeZone: "Asia/Bangkok",
+      year: "2-digit",
+      month: "2-digit",
+      day: "2-digit",
+    })
+      .formatToParts(new Date())
+      .map((p) => [p.type, p.value])
+  );
+  const yymmdd = `${bkk.year}${bkk.month}${bkk.day}`;
+  const safeName =
+    (project.name || "project").replace(/[\\/:*?"<>|\x00-\x1f]+/g, " ").replace(/\s+/g, " ").trim() || "project";
+  const base = `SRS_${safeName}_${yymmdd}`;
+  // Non-ASCII (Thai) names need filename* (RFC 5987); keep an ASCII fallback too.
+  const ascii = base.replace(/[^\x20-\x7e]/g, "_");
   return new Response(out as unknown as BodyInit, {
     headers: {
       "Content-Type": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-      "Content-Disposition": `attachment; filename="${filenameBase}_BOI_SRS.docx"`,
+      "Content-Disposition": `attachment; filename="${ascii}.docx"; filename*=UTF-8''${encodeURIComponent(
+        base + ".docx"
+      )}`,
       "Cache-Control": "no-store",
     },
   });
