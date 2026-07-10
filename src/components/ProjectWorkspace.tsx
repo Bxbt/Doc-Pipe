@@ -60,6 +60,7 @@ type Props = {
   projectId: string;
   project: {
     name: string;
+    exportName: string;
     customer: string | null;
     businessType: string;
     description: string | null;
@@ -545,6 +546,7 @@ function Settings({ projectId, project, perms, businessTypeNames }: Props) {
   const router = useRouter();
   const [form, setForm] = useState({
     name: project.name,
+    exportName: project.exportName ?? "",
     customer: project.customer ?? "",
     businessType: project.businessType,
     description: project.description ?? "",
@@ -581,6 +583,17 @@ function Settings({ projectId, project, perms, businessTypeNames }: Props) {
         </L>
         <L label="Customer">
           <input value={form.customer} onChange={(e) => setForm({ ...form, customer: e.target.value })} className={inputCls} />
+        </L>
+        <L label="Export file name">
+          <input
+            value={form.exportName}
+            onChange={(e) => setForm({ ...form, exportName: e.target.value })}
+            placeholder={project.name}
+            className={inputCls}
+          />
+          <span className="text-xs text-muted">
+            Base name for exported files: {(form.exportName.trim() || project.name)}_YYMMDD.docx. Empty uses the project name.
+          </span>
         </L>
         <div className="grid grid-cols-2 gap-4">
           <L label="Business type">

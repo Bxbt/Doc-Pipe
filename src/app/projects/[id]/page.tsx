@@ -145,6 +145,7 @@ export default async function ProjectPage({ params }: { params: { id: string } }
         projectId={project.id}
         project={{
           name: project.name,
+          exportName: project.exportName ?? "",
           customer: project.customer,
           businessType: project.businessType,
           description: project.description,

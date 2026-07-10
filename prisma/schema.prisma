@@ -51,6 +51,9 @@ model PersonalAccessToken {
 model Project {
   id          String   @id @default(cuid())
   name        String
+  // Optional base name for exported files ({exportName}_YYMMDD.docx). Lets a
+  // Thai-named project get a clean ASCII filename; empty falls back to name.
+  exportName  String?
   customer    String?
   // Drives the Smart Checklist of recommended documents.
   businessType String  @default("Generic")

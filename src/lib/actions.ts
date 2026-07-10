@@ -337,6 +337,7 @@ export async function updateProject(
   projectId: string,
   input: {
     name?: string;
+    exportName?: string;
     customer?: string;
     businessType?: string;
     description?: string;
@@ -352,6 +353,7 @@ export async function updateProject(
     where: { id: projectId },
     data: {
       ...(input.name !== undefined ? { name: input.name } : {}),
+      ...(input.exportName !== undefined ? { exportName: input.exportName.trim() || null } : {}),
       ...(input.customer !== undefined ? { customer: input.customer || null } : {}),
       ...(input.businessType !== undefined ? { businessType: input.businessType } : {}),
       ...(input.description !== undefined ? { description: input.description || null } : {}),

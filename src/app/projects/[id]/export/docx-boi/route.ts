@@ -150,14 +150,13 @@ async function coverLogoImage(
 // never overruns), and a horizontal offset that seats it just left of our logo
 // so the two sit side by side, both right-aligned to the same baseline.
 const LOGO_BOX = 1423035; // our logo's square extent, in EMU
-const COMPANY_X = 3205835; // where our logo anchors from the column
 function customerLogoRun(companyDrawing: string, rid: string, w: number, h: number): string {
   const scale = LOGO_BOX / Math.max(w, h);
   const cx = Math.max(1, Math.round(w * scale));
   const cy = Math.max(1, Math.round(h * scale));
-  // Seat it to the left of our logo with the usual gap, right edge flush so the
-  // two read as a pair regardless of the customer logo's width.
-  const custX = COMPANY_X - 114300 - cx;
+  // Absolute horizontal position: 4 cm to the right of the column (360000
+  // EMU/cm), fixed regardless of the logo's width.
+  const custX = 1440000;
   const drawing = companyDrawing
     .replace(/r:embed="rId\d+"/, `r:embed="${rid}"`)
     .replace(
@@ -691,9 +690,9 @@ async function buildBoiDocx(id: string, mermaidImages: Record<string, string>) {
 
   const out: Buffer = outZip.generate({ type: "nodebuffer" });
 
-  // Filename: SRS_{ProjectName}_YYMMDD.docx — date in Thailand time (Asia/Bangkok)
-  // so the day rolls over at local midnight. Project name keeps spaces/Thai;
-  // only filesystem-illegal chars are dropped.
+  // Filename: {exportName || project name}_YYMMDD.docx — date in Thailand time
+  // (Asia/Bangkok) so the day rolls over at local midnight. The base keeps
+  // spaces/Thai; only filesystem-illegal chars are dropped.
   const bkk = Object.fromEntries(
     new Intl.DateTimeFormat("en-US", {
       timeZone: "Asia/Bangkok",
@@ -705,9 +704,10 @@ async function buildBoiDocx(id: string, mermaidImages: Record<string, string>) {
       .map((p) => [p.type, p.value])
   );
   const yymmdd = `${bkk.year}${bkk.month}${bkk.day}`;
+  const rawBase = project.exportName?.trim() || project.name || "project";
   const safeName =
-    (project.name || "project").replace(/[\\/:*?"<>|\x00-\x1f]+/g, " ").replace(/\s+/g, " ").trim() || "project";
-  const base = `SRS_${safeName}_${yymmdd}`;
+    rawBase.replace(/[\\/:*?"<>|\x00-\x1f]+/g, " ").replace(/\s+/g, " ").trim() || "project";
+  const base = `${safeName}_${yymmdd}`;
   // Non-ASCII (Thai) names need filename* (RFC 5987); keep an ASCII fallback too.
   const ascii = base.replace(/[^\x20-\x7e]/g, "_");
   return new Response(out as unknown as BodyInit, {
