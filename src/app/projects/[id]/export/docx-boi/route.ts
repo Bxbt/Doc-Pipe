@@ -347,16 +347,15 @@ function headingSpacing(inner: string): string {
 // (Word's "Repeat as header row"). <w:tblHeader/> lives in the row's <w:trPr>.
 function repeatTableHeaders(docXml: string): string {
   return docXml.replace(/<w:tbl>[\s\S]*?<\/w:tbl>/g, (tbl) => {
-    // Only the first row. Match its <w:tr ...> and any immediate <w:trPr>…</w:trPr>.
+    // First row only (no /g). Its <w:trPr> may be self-closing (<w:trPr/>),
+    // a full <w:trPr>…</w:trPr>, or absent — handle all three.
     return tbl.replace(
-      /<w:tr\b([^>]*)>(\s*<w:trPr>([\s\S]*?)<\/w:trPr>)?/,
-      (_m, attrs: string, trPr: string | undefined, inner: string | undefined) => {
-        if (trPr) {
-          if (/<w:tblHeader\b/.test(inner!)) return _m; // already set
-          // tblHeader is late in the trPr schema order, so append it last.
-          return `<w:tr${attrs}><w:trPr>${inner}<w:tblHeader/></w:trPr>`;
-        }
-        return `<w:tr${attrs}><w:trPr><w:tblHeader/></w:trPr>`;
+      /(<w:tr\b[^>]*>)(\s*<w:trPr\s*\/>|\s*<w:trPr>[\s\S]*?<\/w:trPr>)?/,
+      (m, open: string, trPr: string | undefined) => {
+        if (!trPr || /<w:trPr\s*\/>/.test(trPr)) return `${open}<w:trPr><w:tblHeader/></w:trPr>`;
+        if (/<w:tblHeader\b/.test(trPr)) return m; // already set
+        // tblHeader is late in the trPr schema order, so append it last.
+        return `${open}${trPr.replace("</w:trPr>", "<w:tblHeader/></w:trPr>")}`;
       }
     );
   });
@@ -376,8 +375,10 @@ const HDR_SHD = `<w:shd w:val="clear" w:color="auto" w:fill="041C4D"/>`;
 const WHITE = `<w:color w:val="FFFFFF"/>`;
 
 function styleHeaderRow(row: string): string {
-  // Shade every cell (shd follows tcBorders in the tcPr schema order).
-  let r = row.replace(/<\/w:tcBorders>/g, `</w:tcBorders>${HDR_SHD}`);
+  // Shade every cell + vertical-center its text (shd then vAlign follow
+  // tcBorders in the tcPr schema order). vAlign matters when a sibling cell
+  // wraps and stretches the row — text sits centered, not pinned to the top.
+  let r = row.replace(/<\/w:tcBorders>/g, `</w:tcBorders>${HDR_SHD}<w:vAlign w:val="center"/>`);
   // White text on every run.
   r = r.replace(/<w:rPr\/>/g, `<w:rPr>${WHITE}</w:rPr>`);
   r = r.replace(/<w:rPr>(?!<\/w:rPr>)([\s\S]*?)<\/w:rPr>/g, (m, inner: string) =>
