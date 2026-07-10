@@ -313,6 +313,10 @@ function thaiRun(run: string, bold = false, autoColor = false): string {
         (bold && !/<w:b\b/.test(body) ? b : "") +
         (autoColor && !/<w:color\b/.test(body) ? color : "");
       let bb = prefix + body;
+      // Thai is complex-script, so bold comes from <w:bCs/>, not <w:b/>. When a
+      // run carries <w:b/> (e.g. html-to-docx from <strong>) but no <w:bCs/>,
+      // mirror it so bold actually shows on Thai text.
+      if (/<w:b\/>/.test(bb) && !/<w:bCs\/>/.test(bb)) bb = bb.replace(/<w:b\/>/, "<w:b/><w:bCs/>");
       if (!/<w:sz\b/.test(bb)) bb += size;
       if (!/<w:cs\s*\/>/.test(bb)) bb += "<w:cs/>";
       return `<w:rPr>${bb}</w:rPr>`;
@@ -370,7 +374,11 @@ const TBL_BORDERS = `<w:tblBorders>${["top", "left", "bottom", "right", "insideH
   .map(BORDER)
   .join("")}</w:tblBorders>`;
 const TC_BORDERS = `<w:tcBorders>${["top", "left", "bottom", "right"].map(BORDER).join("")}</w:tcBorders>`;
-const HDR_SHD = `<w:shd w:val="clear" w:color="auto" w:fill="041C4D"/>`;
+const HDR_SHD = `<w:shd w:val="clear" w:color="auto" w:fill="0A1C4A"/>`;
+// Cell padding 0.1 cm (≈57 dxa) on every side.
+const CELL_MAR = `<w:tblCellMar>${["top", "left", "bottom", "right"]
+  .map((s) => `<w:${s} w:w="57" w:type="dxa"/>`)
+  .join("")}</w:tblCellMar>`;
 const WHITE = `<w:color w:val="FFFFFF"/>`;
 
 function styleHeaderRow(row: string): string {
@@ -393,13 +401,34 @@ function styleContentTables(ooxml: string): string {
     let t = tbl.replace(/<w:tblPr>([\s\S]*?)<\/w:tblPr>/, (_m, inner: string) => {
       const rest = inner
         .replace(/<w:tblBorders>[\s\S]*?<\/w:tblBorders>/, "")
-        .replace(/<w:tblW\b[^>]*\/>/, "");
-      return `<w:tblPr><w:tblW w:w="${TBL_W_DXA}" w:type="dxa"/>${TBL_BORDERS}${rest}</w:tblPr>`;
+        .replace(/<w:tblW\b[^>]*\/>/, "")
+        .replace(/<w:tblCellMar>[\s\S]*?<\/w:tblCellMar>/, "");
+      return `<w:tblPr><w:tblW w:w="${TBL_W_DXA}" w:type="dxa"/>${TBL_BORDERS}${CELL_MAR}${rest}</w:tblPr>`;
     });
     // Recolour every cell's borders.
     t = t.replace(/<w:tcBorders>[\s\S]*?<\/w:tcBorders>/g, TC_BORDERS);
     // First row = header: navy fill + white text.
     t = t.replace(/<w:tr\b[^>]*>[\s\S]*?<\/w:tr>/, styleHeaderRow);
+    // Thai-tag every cell run (TH Sarabun + <w:cs/>) so Thai wraps by syllable
+    // instead of being treated as one unbreakable word — same fix as body
+    // paragraphs. Runs down here keep any header white already applied.
+    t = t.replace(/<w:r\b(?:(?!<\/w:r>)[\s\S])*?<\/w:r>/g, (r) => thaiRun(r));
+    // Cell text is left-aligned (NOT thaiDistribute like body paragraphs). Every
+    // <w:p> inside a <w:tbl> is a cell paragraph, so force jc=left on each.
+    t = t.replace(/<w:p\b([^>]*)>([\s\S]*?)<\/w:p>/g, (_m, attrs: string, inner: string) => {
+      const JC = '<w:jc w:val="left"/>';
+      if (/<w:pPr>/.test(inner)) {
+        inner = inner.replace(/<w:pPr>([\s\S]*?)<\/w:pPr>/, (_p, ppr: string) => {
+          const cleaned = ppr.replace(/<w:jc\b[^>]*\/>/g, ""); // jc precedes the paragraph-mark rPr
+          const at = cleaned.match(/<w:rPr>/);
+          const bb = at ? cleaned.slice(0, at.index) + JC + cleaned.slice(at.index!) : cleaned + JC;
+          return `<w:pPr>${bb}</w:pPr>`;
+        });
+      } else {
+        inner = `<w:pPr>${JC}</w:pPr>${inner}`;
+      }
+      return `<w:p${attrs}>${inner}</w:p>`;
+    });
     return t;
   });
 }
@@ -453,6 +482,9 @@ function styleContentParagraphs(ooxml: string): string {
   const tables: string[] = [];
   let s = ooxml.replace(/<w:tbl>[\s\S]*?<\/w:tbl>/g, (m) => `@@TBL${tables.push(m) - 1}@@`);
   s = s.replace(/<w:p\b([^>]*)>([\s\S]*?)<\/w:p>/g, (full, attrs: string, inner: string) => {
+    // A note paragraph (starts with "หมายเหตุ", e.g. the one under the payment
+    // table) is flush-left — no first-line indent — so it reads as a caption.
+    const isNote = /^\s*หมายเหตุ/.test(inner.replace(/<[^>]+>/g, ""));
     // H2/H3 subheadings: space above (none below), thaiDistribute, bold, auto
     // (black) color — overriding the template heading style's blue — and the
     // same 16pt body size (overriding the template's larger heading sizes).
@@ -474,13 +506,15 @@ function styleContentParagraphs(ooxml: string): string {
     // Thai-tag every run so wrapping + font are correct.
     let body = inner.replace(/<w:r\b(?:(?!<\/w:r>)[\s\S])*?<\/w:r>/g, (r) => thaiRun(r));
     // Set alignment + first-line indent (schema wants <w:ind> before <w:jc>).
+    // No first-line indent on note paragraphs.
+    const ind = isNote ? "" : IND;
     if (/<w:pPr>/.test(body)) {
       body = body.replace(/<w:pPr>([\s\S]*?)<\/w:pPr>/, (_m, ppr: string) => {
         const cleaned = ppr.replace(/<w:jc\b[^>]*\/>/g, "").replace(/<w:ind\b[^>]*\/>/g, "");
-        return `<w:pPr>${cleaned}${IND}${JC}</w:pPr>`;
+        return `<w:pPr>${cleaned}${ind}${JC}</w:pPr>`;
       });
     } else {
-      body = `<w:pPr>${IND}${JC}</w:pPr>${body}`;
+      body = `<w:pPr>${ind}${JC}</w:pPr>${body}`;
     }
     return `<w:p${attrs}>${body}</w:p>`;
   });
