@@ -420,7 +420,7 @@ const TBL_BORDERS = `<w:tblBorders>${["top", "left", "bottom", "right", "insideH
   .map(BORDER)
   .join("")}</w:tblBorders>`;
 const TC_BORDERS = `<w:tcBorders>${["top", "left", "bottom", "right"].map(BORDER).join("")}</w:tcBorders>`;
-const HDR_SHD = `<w:shd w:val="clear" w:color="auto" w:fill="0A1C4A"/>`;
+const HDR_SHD = `<w:shd w:val="clear" w:color="auto" w:fill="1F3864"/>`;
 // Cell padding 0.1 cm (≈57 dxa) on every side.
 const CELL_MAR = `<w:tblCellMar>${["top", "left", "bottom", "right"]
   .map((s) => `<w:${s} w:w="57" w:type="dxa"/>`)
