@@ -1,13 +1,12 @@
 import { mkdir } from "node:fs/promises";
-import { dirname, join, extname } from "node:path";
+import { join, extname } from "node:path";
 import { randomBytes } from "node:crypto";
 
-// Where uploaded files live. In production set UPLOAD_DIR=/data/uploads (same
-// volume as the SQLite DB). Otherwise derive a sibling "uploads" dir.
+// Where uploaded files live. In production set UPLOAD_DIR=/data/uploads (a
+// persistent volume). With Postgres the DB no longer implies a filesystem path,
+// so uploads must be configured explicitly; dev falls back to ./data/uploads.
 export function uploadDir(): string {
-  if (process.env.UPLOAD_DIR) return process.env.UPLOAD_DIR;
-  const url = process.env.DATABASE_URL ?? "file:./dev.db";
-  return join(dirname(url.replace(/^file:/, "")), "uploads");
+  return process.env.UPLOAD_DIR ?? join(process.cwd(), "data", "uploads");
 }
 
 export async function ensureUploadDir(): Promise<string> {

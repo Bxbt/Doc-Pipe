@@ -23,3 +23,6 @@ prisma/uploads/
 # stray root db (real db lives in prisma/)
 /dev.db
 /dev.db-journal
+
+# Generated Prisma source client for one-shot SQLite->PG migration
+src/generated/

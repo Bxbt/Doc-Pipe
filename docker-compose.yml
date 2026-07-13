@@ -5,9 +5,13 @@ services:
     container_name: doc-pipeline
     restart: unless-stopped
     environment:
-      # SQLite file lives on the mounted volume so data survives restarts.
-      - DATABASE_URL=file:/data/app.db
-      # Uploaded attachments live on the same volume.
+      # Postgres over the internal Docker network. DIRECT_URL is used by
+      # `prisma db push`/migrations; both point at the same instance (no external
+      # pooler needed at this scale).
+      - DATABASE_URL=postgresql://docpipe:${POSTGRES_PASSWORD}@postgres:5432/docpipe
+      - DIRECT_URL=postgresql://docpipe:${POSTGRES_PASSWORD}@postgres:5432/docpipe
+      # Persistent data volume for uploaded attachments + the seed marker.
+      - DATA_DIR=/data
       - UPLOAD_DIR=/data/uploads
       # Bootstrap admins — always treated as Admin regardless of stored role.
       - ADMIN_EMAILS=${ADMIN_EMAILS:-}
@@ -16,12 +20,34 @@ services:
       - NODE_ENV=production
     volumes:
       - pipeline-data:/data
+    depends_on:
+      postgres:
+        condition: service_healthy
     # Not published to the host — Cloudflare Tunnel reaches it over the
     # internal Docker network. For local testing, uncomment:
     # ports:
     #   - "3000:3000"
     expose:
       - "3000"
+
+  # Postgres — internal only (never published; reached over the Docker network).
+  postgres:
+    image: postgres:16-alpine
+    container_name: doc-pipeline-db
+    restart: unless-stopped
+    environment:
+      - POSTGRES_USER=docpipe
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+      - POSTGRES_DB=docpipe
+    volumes:
+      - pg-data:/var/lib/postgresql/data
+    expose:
+      - "5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U docpipe -d docpipe"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
   # Cloudflare Tunnel — exposes the app at your domain with no open ports.
   # Create a tunnel in Cloudflare Zero Trust, point a public hostname
@@ -38,3 +64,4 @@ services:
 
 volumes:
   pipeline-data:
+  pg-data:

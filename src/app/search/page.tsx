@@ -22,15 +22,20 @@ export default async function SearchPage({
     prisma.project.findMany({
       where: {
         OR: [
-          { name: { contains: q } },
-          { description: { contains: q } },
-          { customer: { contains: q } },
+          { name: { contains: q, mode: "insensitive" } },
+          { description: { contains: q, mode: "insensitive" } },
+          { customer: { contains: q, mode: "insensitive" } },
         ],
       },
       take: 10,
     }),
     prisma.document.findMany({
-      where: { OR: [{ title: { contains: q } }, { content: { contains: q } }] },
+      where: {
+        OR: [
+          { title: { contains: q, mode: "insensitive" } },
+          { content: { contains: q, mode: "insensitive" } },
+        ],
+      },
       include: { project: { select: { id: true, name: true } } },
       take: 20,
     }),

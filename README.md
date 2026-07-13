@@ -132,6 +132,7 @@ Portainer builds the arm64 image and starts `app` + `cloudflared`.
 curl -sk -X PUT "https://<portainer-host>/api/stacks/<stack-id>/git/redeploy?endpointId=<endpoint-id>" \
   -H "X-API-Key: <portainer-token>" -H "Content-Type: application/json" \
   -d '{"RepositoryReferenceName":"refs/heads/main","Env":[
+        {"name":"POSTGRES_PASSWORD","value":"<db-password>"},
         {"name":"ADMIN_EMAILS","value":"<admin-email>"},
         {"name":"SEED_ON_EMPTY","value":"true"},
         {"name":"TUNNEL_TOKEN","value":"<tunnel-token>"}]}'
@@ -141,13 +142,31 @@ curl -sk -X PUT "https://<portainer-host>/api/stacks/<stack-id>/git/redeploy?end
 > `docker buildx build --platform linux/arm64`.
 
 ### 4. Backups
-The `pipeline-data` volume holds both the SQLite DB (`/data/app.db`) and uploaded
-attachments (`/data/uploads`). Back up the whole volume:
+Data lives in **two** places now: the **Postgres** database (volume `pg-data`)
+and uploaded **attachments** on `pipeline-data` (`/data/uploads`). Back up both.
 
+Database — `pg_dump` from the Postgres container:
+```bash
+docker exec doc-pipeline-db pg_dump -U docpipe docpipe \
+  | gzip > doc-pipe-db-$(date +%F).sql.gz
+```
+
+Attachments — tar the uploads volume:
 ```bash
 docker run --rm -v pipeline-data:/data -v "$PWD":/backup alpine \
-  tar czf /backup/doc-pipe-$(date +%F).tar.gz -C /data .
+  tar czf /backup/doc-pipe-uploads-$(date +%F).tar.gz -C /data uploads
 ```
+
+### Migrating from the old SQLite database
+A one-shot copy script moves an existing SQLite DB into Postgres, preserving ids
+and timestamps (so FKs, MCP tokens, and attachment references keep working):
+```bash
+SQLITE_URL="file:/path/to/app.db" \
+DATABASE_URL="postgresql://…" DIRECT_URL="postgresql://…" \
+npm run db:migrate-from-sqlite
+```
+It wipes the target first (safe to re-run for dry-runs) and verifies row counts.
+See `prisma/sqlite-to-pg.ts` + `prisma/sqlite.prisma` (delete both once migrated).
 
 ---
 
