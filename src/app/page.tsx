@@ -72,7 +72,6 @@ export default async function DashboardPage() {
                         </div>
                       </div>
                       <div className="flex items-center gap-3">
-                        <StatusBadge status={p.status} />
                         <div className="w-28">
                           <div className="mb-1 text-right text-[11px] tabular-nums text-muted">
                             {completion}%

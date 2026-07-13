@@ -52,7 +52,7 @@ export async function getDashboardData() {
   const [projects, totalDocs, outdatedDocs, inReviewDocs, recentDocs, activities] =
     await Promise.all([
       prisma.project.findMany({
-        include: { documents: { select: { type: true, status: true } } },
+        include: { documents: { select: { type: true, status: true, updatedAt: true } } },
         orderBy: { updatedAt: "desc" },
       }),
       prisma.document.count(),
@@ -69,6 +69,13 @@ export async function getDashboardData() {
         include: { user: { select: { name: true } }, project: { select: { name: true } } },
       }),
     ]);
+
+  // "Last updated" = most recent document activity, not just project-settings
+  // edits (project.updatedAt only bumps when the project row itself changes).
+  // Fall back to project.updatedAt for projects with no documents.
+  const lastActivity = (p: (typeof projects)[number]) =>
+    p.documents.reduce((max, d) => (d.updatedAt > max ? d.updatedAt : max), p.updatedAt);
+  projects.sort((a, b) => lastActivity(b).getTime() - lastActivity(a).getTime());
 
   const activeProjects = projects.filter((p) => p.status === "Active").length;
 

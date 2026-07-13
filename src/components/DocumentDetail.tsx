@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition, useEffect } from "react";
+import { useState, useTransition, useEffect, useLayoutEffect, useRef } from "react";
 import dynamic from "next/dynamic";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -17,6 +17,7 @@ import {
   ArrowUpRight,
   ArrowDownRight,
   Lock,
+  ListOrdered,
 } from "lucide-react";
 import { AttachmentPanel } from "./AttachmentPanel";
 import { CommentsProvider } from "./CommentsContext";
@@ -51,6 +52,7 @@ const BlockEditor = dynamic(
 
 type RelDoc = { id: string; type: string; typeLabel: string; status: string };
 type PickDoc = { id: string; type: string; typeLabel: string; title: string };
+type PipelineDoc = { id: string; typeLabel: string; title: string; status: string };
 
 type Doc = {
   id: string;
@@ -70,6 +72,7 @@ export function DocumentDetail({
   upstream,
   downstream,
   allDocs,
+  pipeline,
   attachments,
   threads,
   versions,
@@ -82,6 +85,7 @@ export function DocumentDetail({
   upstream: RelDoc[];
   downstream: RelDoc[];
   allDocs: PickDoc[];
+  pipeline: PipelineDoc[];
   attachments: { id: string; filename: string; mime: string; size: number }[];
   threads: CommentThreadFull[];
   versions: VersionLite[];
@@ -428,8 +432,16 @@ export function DocumentDetail({
         canAdmin={perms.canAdmin}
       >
         <div className="grid gap-5 lg:grid-cols-[1fr_240px]">
-          {/* content */}
-          <div className={`rounded-xl border border-border bg-surface p-6${compactTables ? " tables-compact" : ""}`}>
+          {/* content — highlighted while editing so focus stays on the doc */}
+          <div
+            className={cn(
+              "rounded-xl border bg-surface p-6 transition-all duration-300",
+              compactTables && "tables-compact",
+              editing
+                ? "border-brand/50 shadow-xl shadow-black/20 ring-2 ring-brand/30"
+                : "border-border"
+            )}
+          >
             {/* Table size toggle: preview how tables shrink in the Word export. */}
             <div className="mb-3 flex items-center justify-end gap-2 text-xs text-muted">
               <span>Table size</span>
@@ -455,8 +467,15 @@ export function DocumentDetail({
             )}
           </div>
 
-          {/* related docs + comments */}
-          <div className="flex flex-col gap-4">
+          {/* related docs + comments — dimmed while editing to fade the surroundings */}
+          <div
+            className={cn(
+              "flex flex-col gap-4 transition-all duration-300",
+              editing && "pointer-events-none select-none opacity-40 blur-[1px]"
+            )}
+            aria-hidden={editing || undefined}
+          >
+            <PipelineRail projectId={projectId} docs={pipeline} currentId={doc.id} />
             <RelatedPanel
               title="Depends on"
               icon={<ArrowUpRight size={13} />}
@@ -484,6 +503,68 @@ export function DocumentDetail({
           </div>
         </div>
       </CommentsProvider>
+    </div>
+  );
+}
+
+// Sidebar rail listing the whole pipeline in order. Click any document to jump
+// straight to it without leaving the detail view; the current one is highlighted.
+function PipelineRail({
+  projectId,
+  docs,
+  currentId,
+}: {
+  projectId: string;
+  docs: PipelineDoc[];
+  currentId: string;
+}) {
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const activeRef = useRef<HTMLAnchorElement>(null);
+  // Each jump loads a fresh page, so the rail remounts scrolled to the top.
+  // Bring the current document back into view within the rail (container only,
+  // never the window) so the list stays where the user was reading.
+  useLayoutEffect(() => {
+    const c = scrollRef.current;
+    const e = activeRef.current;
+    if (!c || !e) return;
+    const cr = c.getBoundingClientRect();
+    const er = e.getBoundingClientRect();
+    if (er.top < cr.top || er.bottom > cr.bottom) c.scrollTop += er.top - cr.top - 8;
+  }, [currentId]);
+
+  if (docs.length <= 1) return null;
+  return (
+    <div className="rounded-xl border border-border bg-surface p-4">
+      <div className="mb-2 flex items-center gap-1.5 text-xs font-semibold text-muted">
+        <ListOrdered size={13} /> Pipeline
+      </div>
+      {/* ~4 rows tall, then scroll (the 5th peeks to signal there's more). */}
+      <div ref={scrollRef} className="flex max-h-[10.5rem] flex-col gap-1 overflow-y-auto">
+        {docs.map((d, i) => {
+          const active = d.id === currentId;
+          return (
+            <Link
+              key={d.id}
+              ref={active ? activeRef : undefined}
+              href={`/projects/${projectId}/documents/${d.id}`}
+              aria-current={active ? "page" : undefined}
+              title={d.title}
+              className={cn(
+                "flex items-center justify-between gap-2 rounded-lg border px-2.5 py-1.5 text-xs",
+                active
+                  ? "border-brand bg-brand/10 text-fg"
+                  : "border-border hover:border-brand/50 hover:text-brand"
+              )}
+            >
+              <span className="flex min-w-0 items-center gap-1.5">
+                <span className="shrink-0 tabular-nums text-[10px] text-muted">{i + 1}</span>
+                <span className="truncate">{d.typeLabel}</span>
+              </span>
+              <StatusBadge status={d.status} />
+            </Link>
+          );
+        })}
+      </div>
     </div>
   );
 }

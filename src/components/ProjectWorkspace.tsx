@@ -82,7 +82,6 @@ type Props = {
   completion: number;
   missing: { label: string; type?: string; present: boolean; trackable: boolean }[];
   traceability: { columns: string[]; rows: TraceRow[] };
-  members: { name: string; email: string; role: string }[];
 };
 
 const TABS = ["Pipeline", "Dependency Graph", "Traceability", "Health", "Checklist", "Settings"] as const;

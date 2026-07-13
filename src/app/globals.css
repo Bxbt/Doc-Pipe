@@ -64,6 +64,15 @@ body {
 .prose-doc ul { list-style: disc; padding-left: 1.4rem; margin: 0.75rem 0; }
 .prose-doc ol { list-style: decimal; padding-left: 1.4rem; margin: 0.75rem 0; }
 .prose-doc li { margin: 0.3rem 0; }
+/* Checklist items (BlockNote: <li><input type="checkbox"><p>…) carry a list
+   bullet by default — drop it and lay the checkbox inline with its text. */
+.prose-doc li:has(> input[type="checkbox"]) {
+  list-style: none;
+  display: flex;
+  align-items: flex-start;
+  gap: 0.4rem;
+}
+.prose-doc li:has(> input[type="checkbox"]) > p { margin: 0; }
 .prose-doc a { color: rgb(var(--brand)); text-decoration: underline; }
 .prose-doc code {
   background: rgb(var(--surface-2));
@@ -93,7 +102,7 @@ body {
   text-align: left;
 }
 .prose-doc th { background: rgb(var(--surface-2)); font-weight: 600; }
-.prose-doc input[type="checkbox"] { margin-right: 0.5rem; }
+.prose-doc input[type="checkbox"] { margin-top: 0.35rem; }
 .prose-doc blockquote {
   border-left: 3px solid rgb(var(--brand));
   padding-left: 1rem;
@@ -131,6 +140,11 @@ body {
 .bn-wrap .bn-editor {
   font-size: 0.95rem;
   line-height: 1.7;
+}
+/* BlockNote's .bn-default-styles hard-sets 16px, overriding .bn-editor above and
+   making editor text bigger than the read view (.prose-doc @ 0.95rem). Match it. */
+.bn-wrap .bn-default-styles {
+  font-size: 0.95rem;
 }
 .bn-wrap .bn-block-content[data-content-type="heading"] {
   font-size: 1.5rem !important; /* h1 (BlockNote omits data-level for level 1) */

@@ -5,7 +5,6 @@ import { getProjectFull, computeHealth, overallCompletion, missingDocs } from "@
 import { downstreamOf } from "@/lib/graph";
 import { ProjectWorkspace } from "@/components/ProjectWorkspace";
 import { WordBoiExport } from "@/components/WordBoiExport";
-import { StatusBadge } from "@/components/badges";
 import { formatDate } from "@/lib/utils";
 import { getCurrentUser, canEdit, canAdmin } from "@/lib/auth";
 import { getBusinessTypes } from "@/lib/business-types";
@@ -85,12 +84,6 @@ export default async function ProjectPage({ params }: { params: { id: string } }
     return { reqId: req.id, reqTitle: req.title, reqType: req.type, cells };
   });
 
-  const members = project.members.map((m) => ({
-    name: m.user.name,
-    email: m.user.email,
-    role: m.user.role,
-  }));
-
   return (
     <div>
       <Link
@@ -104,7 +97,6 @@ export default async function ProjectPage({ params }: { params: { id: string } }
         <div>
           <div className="flex items-center gap-3">
             <h1 className="text-xl font-semibold">{project.name}</h1>
-            <StatusBadge status={project.status} />
           </div>
           <p className="mt-1 max-w-2xl text-sm text-muted">{project.description}</p>
           <div className="mt-2 flex flex-wrap gap-x-5 gap-y-1 text-[11px] text-muted">
@@ -126,17 +118,6 @@ export default async function ProjectPage({ params }: { params: { id: string } }
             <Download size={14} /> Export
           </a>
           <WordBoiExport projectId={project.id} />
-        </div>
-        <div className="flex -space-x-2">
-          {members.slice(0, 6).map((m) => (
-            <div
-              key={m.email}
-              title={`${m.name} · ${m.role}`}
-              className="flex h-8 w-8 items-center justify-center rounded-full border-2 border-bg bg-surface-2 text-[10px] font-semibold"
-            >
-              {m.name.split(" ").map((p) => p[0]).slice(0, 2).join("").toUpperCase()}
-            </div>
-          ))}
         </div>
         </div>
       </div>
@@ -164,7 +145,6 @@ export default async function ProjectPage({ params }: { params: { id: string } }
         completion={completion}
         missing={missing}
         traceability={{ columns: TRACE_COLUMNS.map((c) => c.label), rows }}
-        members={members}
       />
     </div>
   );

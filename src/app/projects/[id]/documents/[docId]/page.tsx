@@ -28,7 +28,7 @@ export default async function DocumentPage({
     prisma.project.findUnique({
       where: { id: params.id },
       include: {
-        documents: { select: { id: true, type: true, title: true, status: true, outdated: true } },
+        documents: { select: { id: true, type: true, title: true, status: true, outdated: true, order: true } },
         dependencies: true,
       },
     }),
@@ -75,6 +75,16 @@ export default async function DocumentPage({
     .filter((d) => d.id !== doc.id)
     .map((d) => ({ id: d.id, type: d.type, typeLabel: typeLabelOf(d.type), title: d.title }));
 
+  // Full pipeline (in order, incl. the current doc) for the sidebar nav rail.
+  const pipeline = [...project.documents]
+    .sort((a, b) => a.order - b.order)
+    .map((d) => ({
+      id: d.id,
+      typeLabel: typeLabelOf(d.type),
+      title: d.title,
+      status: d.outdated ? "Outdated" : d.status,
+    }));
+
   return (
     <div className="mx-auto max-w-4xl">
       <Link
@@ -100,6 +110,7 @@ export default async function DocumentPage({
         upstream={upstream}
         downstream={downstream}
         allDocs={allDocs}
+        pipeline={pipeline}
         attachments={doc.attachments.map((a) => ({
           id: a.id,
           filename: a.filename,

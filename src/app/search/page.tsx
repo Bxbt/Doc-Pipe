@@ -58,7 +58,6 @@ export default async function SearchPage({
                         <div className="text-sm font-medium">{p.name}</div>
                         <div className="text-xs text-muted">{p.customer ?? "—"}</div>
                       </div>
-                      <StatusBadge status={p.status} />
                     </Card>
                   </Link>
                 ))}
