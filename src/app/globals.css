@@ -85,7 +85,7 @@ body {
   width: 100%;
   border-collapse: collapse;
   margin: 1rem 0;
-  font-size: 0.88rem;
+  font-size: 1em; /* full size by default; the "Export size" toggle shrinks it */
 }
 .prose-doc th, .prose-doc td {
   border: 1px solid rgb(var(--border));
@@ -140,6 +140,15 @@ body {
 }
 .bn-wrap .bn-block-content[data-content-type="heading"][data-level="3"] {
   font-size: 1.05rem !important;
+}
+/* "Export size" preview: shrink tables to the 3:4 ratio the Word export uses
+   (12pt table / 16pt body). Off by default (.tables-compact opts in) so tables
+   read at full size in Doc-Pipe and nobody wonders why the text looks small. */
+.tables-compact .prose-doc table,
+.tables-compact .bn-wrap .bn-block-content[data-content-type="table"],
+.tables-compact .bn-wrap .bn-block-content[data-content-type="table"] th,
+.tables-compact .bn-wrap .bn-block-content[data-content-type="table"] td {
+  font-size: 0.75em;
 }
 
 /* BlockNote sizes the side menu (drag handle + "+") to a fixed height per

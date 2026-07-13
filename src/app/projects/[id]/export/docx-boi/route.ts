@@ -212,6 +212,50 @@ type Merged = {
   relsAppend: string; // <Relationship> lines to add for images
 };
 
+// Per-table column widths come from the editor itself: dragging a column border
+// in BlockNote records the width in the table's <colgroup> — a resized column is
+// <col style="width: NNNpx"> and an un-resized one is a bare <col>. Read those
+// widths per table (in document order) as relative ratios; un-resized columns
+// fall back to BlockNote's default column width so every column has a ratio.
+// A table with no resized column is left auto-distributed (null). html-to-docx
+// drops the colgroup, so we must capture this before that pass.
+const DEFAULT_COL_PX = 120; // BlockNote's default/min column width
+function parseColSpecs(html: string): { html: string; specs: (number[] | null)[] } {
+  const specs: (number[] | null)[] = [];
+  const tableRe = /<table\b[^>]*>([\s\S]*?)<\/table>/gi;
+  let tm: RegExpExecArray | null;
+  while ((tm = tableRe.exec(html))) {
+    const cg = tm[1].match(/<colgroup>([\s\S]*?)<\/colgroup>/i);
+    const cols = cg ? cg[1].match(/<col\b[^>]*>/gi) || [] : [];
+    const px = cols.map((c) => {
+      const w = c.match(/width:\s*(\d+(?:\.\d+)?)px/i);
+      return w ? parseFloat(w[1]) : null;
+    });
+    // No column was resized → leave the table auto-distributed.
+    specs.push(px.some((p) => p != null) ? px.map((p) => p ?? DEFAULT_COL_PX) : null);
+  }
+  return { html, specs };
+}
+
+// Word renders each list marker using that level's own <w:rPr> in numbering.xml.
+// Force every bullet glyph to 12pt (sz 24) while the list *text* keeps its 16pt
+// paragraph size. Only bullet levels are touched — numbered markers stay as-is.
+function sizeBulletMarkers(abstracts: string): string {
+  const SZ = '<w:sz w:val="24"/><w:szCs w:val="24"/>';
+  return abstracts.replace(/<w:lvl\b[\s\S]*?<\/w:lvl>/g, (lvl) => {
+    if (!/<w:numFmt\s+w:val="bullet"\s*\/>/.test(lvl)) return lvl;
+    if (/<w:rPr>/.test(lvl)) {
+      return lvl.replace(/<w:rPr>([\s\S]*?)<\/w:rPr>/, (_m, inner: string) => {
+        const kept = inner.replace(/<w:sz\b[^>]*\/>/g, "").replace(/<w:szCs\b[^>]*\/>/g, "");
+        return `<w:rPr>${kept}${SZ}</w:rPr>`;
+      });
+    }
+    if (/<w:rPr\s*\/>/.test(lvl)) return lvl.replace(/<w:rPr\s*\/>/, `<w:rPr>${SZ}</w:rPr>`);
+    // rPr is the last child of <w:lvl> — append it before the close tag.
+    return lvl.replace("</w:lvl>", `<w:rPr>${SZ}</w:rPr></w:lvl>`);
+  });
+}
+
 // Render every section in ONE html-to-docx pass (sentinel paragraphs mark the
 // boundaries), then remap its numbering/relationship/drawing ids off the
 // template's ranges and split the body back into per-section chunks.
@@ -264,11 +308,13 @@ async function renderSectionsMerged(htmlByKey: Map<string, string>, off: Offsets
   // numbering definitions (remapped). Schema needs all <w:abstractNum> before
   // all <w:num>, so keep them split for insertion at the right spots.
   const numXml = (await zip.file("word/numbering.xml")?.async("string")) || "";
-  const abstracts = (numXml.match(/<w:abstractNum\b[\s\S]*?<\/w:abstractNum>/g) || [])
-    .map((b) =>
-      b.replace(/(<w:abstractNum\b[^>]*\bw:abstractNumId=")(\d+)(")/g, (_m, a, n, c) => a + (+n + off.absOffset) + c)
-    )
-    .join("");
+  const abstracts = sizeBulletMarkers(
+    (numXml.match(/<w:abstractNum\b[\s\S]*?<\/w:abstractNum>/g) || [])
+      .map((b) =>
+        b.replace(/(<w:abstractNum\b[^>]*\bw:abstractNumId=")(\d+)(")/g, (_m, a, n, c) => a + (+n + off.absOffset) + c)
+      )
+      .join("")
+  );
   const nums = (numXml.match(/<w:num\b[\s\S]*?<\/w:num>/g) || [])
     .map((b) =>
       b
@@ -391,20 +437,64 @@ function styleHeaderRow(row: string): string {
   r = r.replace(/<w:rPr>(?!<\/w:rPr>)([\s\S]*?)<\/w:rPr>/g, (m, inner: string) =>
     /<w:color\b/.test(inner) ? m : `<w:rPr>${WHITE}${inner}</w:rPr>`
   );
+  // Header cells are always bold, regardless of the source markdown (Thai bold =
+  // <w:b/> + <w:bCs/>; thaiRun mirrors b→bCs). Body cells keep their own bold.
+  r = r.replace(/<w:r\b(?:(?!<\/w:r>)[\s\S])*?<\/w:r>/g, (run) => thaiRun(run, true));
   return r;
 }
 
-function styleContentTables(ooxml: string): string {
+// Split the fixed table width (TBL_W_DXA) across columns by the given relative
+// ratios, in dxa. Rounding drift is absorbed by the last column so the columns
+// always sum to exactly the table width.
+function colWidths(ratios: number[]): number[] {
+  const total = ratios.reduce((a, b) => a + b, 0);
+  const w = ratios.map((r) => Math.round((TBL_W_DXA * r) / total));
+  w[w.length - 1] += TBL_W_DXA - w.reduce((a, b) => a + b, 0);
+  return w;
+}
+
+// `specs`: per-table column-width ratios in document order (null = leave the
+// table's columns auto-distributed). A spec is applied only when its length
+// matches the table's real column count; otherwise it is ignored.
+function styleContentTables(ooxml: string, specs: (number[] | null)[] = []): string {
   if (!ooxml) return ooxml;
+  let ti = -1;
   return ooxml.replace(/<w:tbl>[\s\S]*?<\/w:tbl>/g, (tbl) => {
+    ti += 1;
+    const spec = specs[ti] ?? null;
+    // Only fix the column layout when the marker's column count matches the grid.
+    const nCols = (tbl.match(/<w:tblGrid>([\s\S]*?)<\/w:tblGrid>/)?.[1].match(/<w:gridCol\b/g) || []).length;
+    const widths = spec && spec.length === nCols ? colWidths(spec) : null;
+    // Word only honours per-column widths under a fixed layout; otherwise it
+    // autofits and ignores the grid.
+    const LAYOUT = widths ? '<w:tblLayout w:type="fixed"/>' : "";
     // tblPr: preferred width + full borders (drop html-to-docx's own defaults).
     let t = tbl.replace(/<w:tblPr>([\s\S]*?)<\/w:tblPr>/, (_m, inner: string) => {
       const rest = inner
         .replace(/<w:tblBorders>[\s\S]*?<\/w:tblBorders>/, "")
         .replace(/<w:tblW\b[^>]*\/>/, "")
+        .replace(/<w:tblLayout\b[^>]*\/>/, "")
         .replace(/<w:tblCellMar>[\s\S]*?<\/w:tblCellMar>/, "");
-      return `<w:tblPr><w:tblW w:w="${TBL_W_DXA}" w:type="dxa"/>${TBL_BORDERS}${CELL_MAR}${rest}</w:tblPr>`;
+      // Schema order: tblW, tblBorders, tblLayout, tblCellMar, …
+      return `<w:tblPr><w:tblW w:w="${TBL_W_DXA}" w:type="dxa"/>${TBL_BORDERS}${LAYOUT}${CELL_MAR}${rest}</w:tblPr>`;
     });
+    if (widths) {
+      // Rewrite the shared grid, then each cell's own preferred width by column.
+      t = t.replace(
+        /<w:tblGrid>[\s\S]*?<\/w:tblGrid>/,
+        `<w:tblGrid>${widths.map((x) => `<w:gridCol w:w="${x}"/>`).join("")}</w:tblGrid>`
+      );
+      t = t.replace(/<w:tr\b[^>]*>[\s\S]*?<\/w:tr>/g, (tr) => {
+        let ci = -1;
+        return tr.replace(/<w:tc>([\s\S]*?)<\/w:tc>/g, (tc) => {
+          ci += 1;
+          const wv = widths[ci] ?? widths[widths.length - 1];
+          if (/<w:tcW\b[^>]*\/>/.test(tc)) return tc.replace(/<w:tcW\b[^>]*\/>/, `<w:tcW w:w="${wv}" w:type="dxa"/>`);
+          if (/<w:tcPr>/.test(tc)) return tc.replace(/<w:tcPr>/, `<w:tcPr><w:tcW w:w="${wv}" w:type="dxa"/>`);
+          return tc;
+        });
+      });
+    }
     // Recolour every cell's borders.
     t = t.replace(/<w:tcBorders>[\s\S]*?<\/w:tcBorders>/g, TC_BORDERS);
     // First row = header: navy fill + white text.
@@ -413,6 +503,11 @@ function styleContentTables(ooxml: string): string {
     // instead of being treated as one unbreakable word — same fix as body
     // paragraphs. Runs down here keep any header white already applied.
     t = t.replace(/<w:r\b(?:(?!<\/w:r>)[\s\S])*?<\/w:r>/g, (r) => thaiRun(r));
+    // Table text is 12pt (the body is 16pt). Shrink every run + paragraph-mark
+    // size (thaiRun stamps 16pt = sz 32; force all table sizes down to 24).
+    t = t
+      .replace(/<w:sz w:val="\d+"\/>/g, '<w:sz w:val="24"/>')
+      .replace(/<w:szCs w:val="\d+"\/>/g, '<w:szCs w:val="24"/>');
     // Cell text is left-aligned (NOT thaiDistribute like body paragraphs). Every
     // <w:p> inside a <w:tbl> is a cell paragraph, so force jc=left on each.
     t = t.replace(/<w:p\b([^>]*)>([\s\S]*?)<\/w:p>/g, (_m, attrs: string, inner: string) => {
@@ -582,14 +677,18 @@ async function buildBoiDocx(id: string, mermaidImages: Record<string, string>) {
   // Per-section HTML for every section that actually has a document.
   const byType = new Map(docs.map((d) => [d.type, d]));
   const htmlByKey = new Map<string, string>();
+  const colSpecsByKey = new Map<string, (number[] | null)[]>();
   for (const key of SECTION_KEYS) {
     const doc = byType.get(key);
     if (doc) {
       // contentToHtml → swap mermaid fences for the browser-rendered PNGs →
-      // embed attachment images. The swapped-in <img> is a data URI, so it
-      // rides the same html-to-docx image pass as everything else.
+      // read per-table column widths from each <colgroup> (html-to-docx drops it,
+      // so capture the ratios now) → embed attachment images. The swapped-in
+      // <img> is a data URI, so it rides the same html-to-docx image pass.
       const html = swapMermaidImages(contentToHtml(doc.content), mermaidImages);
-      htmlByKey.set(key, await embedImages(html));
+      const { html: captured, specs } = parseColSpecs(html);
+      colSpecsByKey.set(key, specs);
+      htmlByKey.set(key, await embedImages(captured));
     }
   }
 
@@ -616,7 +715,7 @@ async function buildBoiDocx(id: string, mermaidImages: Record<string, string>) {
     `<w:p><w:r><w:br w:type="page"/></w:r></w:p>`;
   for (const key of SECTION_KEYS) {
     templateData[`body${key}`] = htmlByKey.has(key)
-      ? styleContentParagraphs(styleContentTables(merged.bodies.get(key) || "<w:p/>"))
+      ? styleContentParagraphs(styleContentTables(merged.bodies.get(key) || "<w:p/>", colSpecsByKey.get(key)))
       : NOTE_NO_DOC;
   }
 

@@ -101,6 +101,9 @@ export function DocumentDetail({
   const [saveModalOpen, setSaveModalOpen] = useState(false);
   const [isPending, startTransition] = useTransition();
   const [copied, setCopied] = useState(false);
+  // Preview tables at the Word export's compact size (off by default, so the
+  // on-screen tables read full-size).
+  const [compactTables, setCompactTables] = useState(false);
   // Set when someone else holds the lock and we tried to edit.
   const [lockedBy, setLockedBy] = useState<string | null>(null);
   useScrollLock(!!lockedBy || saveModalOpen);
@@ -426,7 +429,25 @@ export function DocumentDetail({
       >
         <div className="grid gap-5 lg:grid-cols-[1fr_240px]">
           {/* content */}
-          <div className="rounded-xl border border-border bg-surface p-6">
+          <div className={`rounded-xl border border-border bg-surface p-6${compactTables ? " tables-compact" : ""}`}>
+            {/* Table size toggle: preview how tables shrink in the Word export. */}
+            <div className="mb-3 flex items-center justify-end gap-2 text-xs text-muted">
+              <span>Table size</span>
+              <div className="inline-flex rounded-lg border border-border p-0.5">
+                <button
+                  onClick={() => setCompactTables(false)}
+                  className={`rounded-md px-2 py-0.5 ${!compactTables ? "bg-brand text-brand-fg" : "hover:bg-surface-2"}`}
+                >
+                  Normal
+                </button>
+                <button
+                  onClick={() => setCompactTables(true)}
+                  className={`rounded-md px-2 py-0.5 ${compactTables ? "bg-brand text-brand-fg" : "hover:bg-surface-2"}`}
+                >
+                  Export size
+                </button>
+              </div>
+            </div>
             {editing ? (
               <BlockEditor key={editorKey} docId={doc.id} initialMarkdown={editorSeed} onChange={setDraft} />
             ) : (
