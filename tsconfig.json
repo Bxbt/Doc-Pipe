@@ -19,5 +19,8 @@
     }
   },
   "include": ["next-env.d.ts", "**/*.ts", "**/*.tsx", ".next/types/**/*.ts"],
-  "exclude": ["node_modules"]
+  // The one-shot migration script imports a client generated at runtime
+  // (src/generated/sqlite-client), which is absent during `next build` — exclude
+  // it (and the generated dir) so the build's type-check doesn't fail on it.
+  "exclude": ["node_modules", "prisma/sqlite-to-pg.ts", "src/generated"]
 }
