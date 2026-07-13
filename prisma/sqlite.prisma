@@ -1,24 +1,23 @@
-// Project Document Pipeline — data model
-// SQLite has no native enums, so enum-like fields are stored as strings
-// and validated in application code (see src/lib/constants.ts).
+// SOURCE schema for the one-shot SQLite → Postgres migration ONLY.
+// Mirrors schema.prisma's models but with the sqlite provider, so the copy
+// script (prisma/sqlite-to-pg.ts) can read the old DB with a second client.
+// Generates to src/generated/sqlite-client (gitignored). Delete both this file
+// and that client once the migration is done.
 
-generator client {
+generator sqliteClient {
   provider = "prisma-client-js"
+  output   = "../src/generated/sqlite-client"
 }
 
 datasource db {
-  provider  = "postgresql"
-  // Runtime connection (pgBouncer/pooler in prod). directUrl is the direct
-  // connection used for migrations / `prisma db push`.
-  url       = env("DATABASE_URL")
-  directUrl = env("DIRECT_URL")
+  provider = "sqlite"
+  url      = env("SQLITE_URL")
 }
 
 model User {
   id        String   @id @default(cuid())
   email     String   @unique
   name      String
-  // Role: Admin | Editor | Reviewer | Viewer
   role      String   @default("Viewer")
   createdAt DateTime @default(now())
 
@@ -33,15 +32,11 @@ model User {
   accessTokens    PersonalAccessToken[]
 }
 
-// A personal access token lets an external client (e.g. a local MCP bridge
-// running beside the user's Claude/ChatGPT) act as this user over the API.
-// Only the SHA-256 hash is stored; the raw token is shown once at creation.
 model PersonalAccessToken {
   id         String    @id @default(cuid())
   userId     String
   name       String
   tokenHash  String    @unique
-  // Non-secret display hint, e.g. "dp_ab12…f9" — safe to store and show.
   preview    String
   lastUsedAt DateTime?
   createdAt  DateTime  @default(now())
@@ -54,13 +49,10 @@ model PersonalAccessToken {
 model Project {
   id          String   @id @default(cuid())
   name        String
-  // Optional base name for exported files ({exportName}_YYMMDD.docx). Lets a
-  // Thai-named project get a clean ASCII filename; empty falls back to name.
   exportName  String?
   customer    String?
-  // Drives the Smart Checklist of recommended documents.
   businessType String  @default("Generic")
-  status      String   @default("Active") // Active | OnHold | Done | Archived
+  status      String   @default("Active")
   description String?
   startDate   DateTime?
   endDate     DateTime?
@@ -86,24 +78,16 @@ model ProjectMember {
 model Document {
   id        String   @id @default(cuid())
   projectId String
-  // One of the DOC_TYPES (see constants.ts): BUSINESS_REQUIREMENT, SRS, ...
   type      String
   title     String
-  // Draft | InReview | Approved | Outdated
   status    String   @default("Draft")
   content   String   @default("")
   version   String   @default("v1.0")
-  // Set true when an upstream document changed after this one was last touched.
   outdated  Boolean  @default(false)
-  // Manual position in the project pipeline (lower = earlier).
   order     Int      @default(0)
-  // Manual node coordinates on the dependency graph (null = auto-layout).
   gx        Int?
   gy        Int?
 
-  // Pessimistic edit lock: who currently has the editor open. `editingAt` is
-  // refreshed by a heartbeat; a lock older than the TTL is treated as stale and
-  // can be taken over (see acquireEditLock in src/lib/actions.ts).
   editingById   String?
   editingByName String?
   editingAt     DateTime?
@@ -115,9 +99,7 @@ model Document {
 
   project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
 
-  // Edges where this document is the upstream source (it affects others).
   outgoing DocumentDependency[] @relation("SourceDoc")
-  // Edges where this document depends on an upstream source.
   incoming DocumentDependency[] @relation("TargetDoc")
 
   threads  CommentThread[]
@@ -128,8 +110,6 @@ model Document {
   @@index([projectId])
 }
 
-// Files attached to a document. Binary lives on disk (see src/lib/storage.ts);
-// only metadata is stored here.
 model Attachment {
   id           String   @id @default(cuid())
   documentId   String
@@ -146,8 +126,6 @@ model Attachment {
   @@index([documentId])
 }
 
-// Directed edge: `target` depends on `source`.
-// When `source` changes, `target` becomes outdated.
 model DocumentDependency {
   id        String @id @default(cuid())
   projectId String
@@ -159,8 +137,6 @@ model DocumentDependency {
   target  Document @relation("TargetDoc", fields: [targetId], references: [id], onDelete: Cascade)
 
   @@unique([sourceId, targetId])
-  // sourceId is already covered by the unique index prefix; index targetId for
-  // upstream lookups and projectId for per-project graph loads.
   @@index([targetId])
   @@index([projectId])
 }
@@ -180,14 +156,9 @@ model DocumentVersion {
   @@index([documentId])
 }
 
-// A comment thread on a document. Doc-level when anchorBlock is null; otherwise
-// it is anchored to a content block (a section/paragraph) in the read view.
 model CommentThread {
   id         String   @id @default(cuid())
   documentId String
-  // Index of the anchored top-level block in the rendered content, and a short
-  // text snippet of it. The snippet re-anchors the thread if blocks shift; a
-  // thread that matches neither is shown in the panel as "orphaned".
   anchorBlock Int?
   anchorQuote String?
   resolved    Boolean  @default(false)
@@ -230,14 +201,12 @@ model Template {
   createdAt   DateTime @default(now())
 }
 
-// A business type and its editable "generate pipeline" definition.
-// docTypes/edges are JSON strings (SQLite has no native arrays).
 model BusinessType {
   id        String   @id @default(cuid())
   name      String   @unique
   sort      Int      @default(0)
-  docTypes  String   @default("[]") // JSON: DocType[]
-  edges     String   @default("[]") // JSON: [from, to][]
+  docTypes  String   @default("[]")
+  edges     String   @default("[]")
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 }
@@ -245,18 +214,13 @@ model BusinessType {
 model Activity {
   id        String   @id @default(cuid())
   projectId String?
-  // The document this activity is about, when it concerns a single document
-  // (edited, added, status change, link target…). Null for project-level events.
   documentId String?
   userId    String?
-  // Free-form action label, e.g. "marked_changed", "edited", "approved"
   action    String
   detail    String?
   createdAt DateTime @default(now())
 
-  // Keep the audit trail even after a project is deleted (projectId becomes null).
   project Project? @relation(fields: [projectId], references: [id], onDelete: SetNull)
-  // Likewise survive document deletion — the link just drops to the project.
   document Document? @relation(fields: [documentId], references: [id], onDelete: SetNull)
   user    User?    @relation(fields: [userId], references: [id])
 

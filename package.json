@@ -10,6 +10,7 @@
     "db:push": "prisma db push",
     "db:seed": "tsx prisma/seed.ts",
     "db:reset": "prisma db push --force-reset && tsx prisma/seed.ts",
+    "db:migrate-from-sqlite": "prisma generate && prisma generate --schema prisma/sqlite.prisma && tsx prisma/sqlite-to-pg.ts",
     "postinstall": "prisma generate"
   },
   "prisma": {

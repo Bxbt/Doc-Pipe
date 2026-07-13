@@ -647,7 +647,7 @@ async function buildBoiDocx(id: string, mermaidImages: Record<string, string>) {
 
   // Approver per document (from the activity log) for the revision table.
   const approvals = await prisma.activity.findMany({
-    where: { projectId: project.id, action: "set_status", detail: { contains: "Approved" } },
+    where: { projectId: project.id, action: "set_status", detail: { contains: "Approved", mode: "insensitive" } },
     include: { user: { select: { name: true } } },
     orderBy: { createdAt: "desc" },
   });

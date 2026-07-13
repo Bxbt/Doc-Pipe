@@ -112,7 +112,7 @@ export async function GET(req: Request, { params }: { params: { id: string } }) 
 
   // Approver per document: who last moved it to Approved (from the activity log).
   const approvals = await prisma.activity.findMany({
-    where: { projectId: project.id, action: "set_status", detail: { contains: "Approved" } },
+    where: { projectId: project.id, action: "set_status", detail: { contains: "Approved", mode: "insensitive" } },
     include: { user: { select: { name: true } } },
     orderBy: { createdAt: "desc" },
   });

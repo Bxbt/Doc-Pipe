@@ -1,21 +1,21 @@
 // Seeds the demo data EXACTLY ONCE per deployment volume, and NEVER overwrites
-// existing data. Uses a marker file next to the SQLite database so the demo is
+// existing data. Uses a marker file on the persistent data volume so the demo is
 // not re-created on later redeploys — even if you delete every project.
+// In prod set DATA_DIR=/data (same volume as uploads); dev falls back to ./data.
 import { PrismaClient } from "@prisma/client";
 import { execSync } from "node:child_process";
 import { existsSync, writeFileSync, mkdirSync } from "node:fs";
-import { dirname, join } from "node:path";
+import { join } from "node:path";
 
-function dbDir(): string {
-  const url = process.env.DATABASE_URL ?? "file:./dev.db";
-  return dirname(url.replace(/^file:/, ""));
+function dataDir(): string {
+  return process.env.DATA_DIR ?? join(process.cwd(), "data");
 }
 
-const marker = join(dbDir(), ".seeded");
+const marker = join(dataDir(), ".seeded");
 
 function writeMarker() {
   try {
-    mkdirSync(dbDir(), { recursive: true });
+    mkdirSync(dataDir(), { recursive: true });
     writeFileSync(marker, new Date().toISOString());
     console.log("  Wrote seed marker.");
   } catch (e) {
