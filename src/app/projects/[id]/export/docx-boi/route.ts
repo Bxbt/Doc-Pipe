@@ -639,40 +639,76 @@ export async function POST(req: Request, { params }: { params: { id: string } })
   return buildBoiDocx(params.id, images);
 }
 
+// The manually-entered revision-history table, emitted as fixed-format OOXML that
+// matches the BOI template exactly (column widths, navy header, cell margins) —
+// NOT run through styleContentTables, so this one table's look is pinned.
+type RevisionRow = { editor: string; date: string; detail: string; version: string; approver: string };
+const REV_WIDTHS = [799, 2171, 1380, 3111, 998, 901]; // dxa, sums to 9360 (16.51cm)
+const REV_HEADERS = ["ลำดับ", "ชื่อผู้แก้ไข", "วันที่", "รายละเอียด", "เวอร์ชั่น", "ผู้อนุมัติ"];
+const REV_CENTER = new Set([0, 4]); // ลำดับ + เวอร์ชั่น are centered; the rest left
+
+// ISO "YYYY-MM-DD" -> "DD/MM/BE" (Buddhist year), matching the template sample.
+function beDate(iso: string): string {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso || "");
+  return m ? `${m[3]}/${m[2]}/${+m[1] + 543}` : esc(iso || "");
+}
+
+function renderRevisionTable(json: string): string {
+  let rows: RevisionRow[] = [];
+  try {
+    const arr = JSON.parse(json || "[]");
+    if (Array.isArray(arr)) rows = arr;
+  } catch {
+    rows = [];
+  }
+
+  const TC_MAR = `<w:tcMar><w:top w:w="80" w:type="dxa"/><w:left w:w="120" w:type="dxa"/><w:bottom w:w="80" w:type="dxa"/><w:right w:w="120" w:type="dxa"/></w:tcMar>`;
+  const rFonts = `<w:rFonts w:ascii="${TH_FONT}" w:hAnsi="${TH_FONT}" w:cs="${TH_FONT}"/>`;
+  const SIZE = `<w:sz w:val="24"/><w:szCs w:val="24"/>`; // 12pt, matching content tables
+
+  const cell = (text: string, i: number, header: boolean): string => {
+    const shd = header ? HDR_SHD : `<w:shd w:val="clear" w:color="auto" w:fill="FFFFFF"/>`;
+    const jc = header || REV_CENTER.has(i) ? "center" : "left";
+    const rpr = `<w:rPr>${rFonts}${header ? "<w:b/><w:bCs/>" : ""}${header ? WHITE : ""}${SIZE}<w:cs/></w:rPr>`;
+    return (
+      `<w:tc><w:tcPr><w:tcW w:w="${REV_WIDTHS[i]}" w:type="dxa"/>${TC_BORDERS}${shd}${TC_MAR}<w:vAlign w:val="center"/></w:tcPr>` +
+      `<w:p><w:pPr><w:jc w:val="${jc}"/></w:pPr><w:r>${rpr}<w:t xml:space="preserve">${esc(text)}</w:t></w:r></w:p></w:tc>`
+    );
+  };
+
+  const headerRow =
+    `<w:tr><w:trPr><w:tblHeader/></w:trPr>` +
+    REV_HEADERS.map((h, i) => cell(h, i, true)).join("") +
+    `</w:tr>`;
+
+  const bodyRows = (rows.length ? rows : [{ editor: "", date: "", detail: "", version: "", approver: "" }])
+    .map((r, idx) => {
+      const cells = [
+        String(idx + 1),
+        r.editor ?? "",
+        beDate(r.date ?? ""),
+        r.detail ?? "",
+        r.version ?? "",
+        r.approver ?? "",
+      ];
+      return `<w:tr>` + cells.map((c, i) => cell(c, i, false)).join("") + `</w:tr>`;
+    })
+    .join("");
+
+  const grid = `<w:tblGrid>${REV_WIDTHS.map((w) => `<w:gridCol w:w="${w}"/>`).join("")}</w:tblGrid>`;
+  const tblPr =
+    `<w:tblPr><w:tblW w:w="9360" w:type="dxa"/>${TBL_BORDERS}<w:tblLayout w:type="fixed"/></w:tblPr>`;
+  return `<w:tbl>${tblPr}${grid}${headerRow}${bodyRows}</w:tbl>`;
+}
+
 async function buildBoiDocx(id: string, mermaidImages: Record<string, string>) {
   const data = await getProjectFull(id);
   if (!data) return new Response("Not found", { status: 404 });
   const { project } = data;
   const docs = project.documents;
 
-  // Approver per document (from the activity log) for the revision table.
-  const approvals = await prisma.activity.findMany({
-    where: { projectId: project.id, action: "set_status", detail: { contains: "Approved", mode: "insensitive" } },
-    include: { user: { select: { name: true } } },
-    orderBy: { createdAt: "desc" },
-  });
-  const approverByDoc = new Map<string, string>();
-  for (const a of approvals) {
-    if (a.documentId && !approverByDoc.has(a.documentId)) approverByDoc.set(a.documentId, a.user?.name ?? "");
-  }
-
-  // Revision history table as OOXML.
-  const revHead = ["ลำดับ", "ชื่อผู้แก้ไข", "วันที่", "รายละเอียด", "เวอร์ชั่น", "ผู้อนุมัติ"];
-  const revBody = docs
-    .map((d, i) => {
-      const approver = d.status === "Approved" ? approverByDoc.get(d.id) || "—" : "—";
-      return `<tr><td>${i + 1}</td><td>${esc(d.updatedBy?.name ?? "—")}</td><td>${esc(
-        formatDate(d.updatedAt)
-      )}</td><td>${esc(docLabel(d.type))} — ${esc(d.title)} (${esc(
-        statusText(d.status, d.outdated)
-      )})</td><td>${esc(d.version)}</td><td>${esc(approver)}</td></tr>`;
-    })
-    .join("");
-  const revisionHtml = `<table><thead><tr>${revHead
-    .map((h) => `<th>${esc(h)}</th>`)
-    .join("")}</tr></thead><tbody>${
-    revBody || `<tr><td>—</td><td>—</td><td>—</td><td>—</td><td>—</td><td>—</td></tr>`
-  }</tbody></table>`;
+  // Revision history is manually entered in project Settings (JSON on Project)
+  // and rendered as a fixed-format table — see renderRevisionTable().
 
   // Per-section HTML for every section that actually has a document.
   const byType = new Map(docs.map((d) => [d.type, d]));
@@ -711,7 +747,7 @@ async function buildBoiDocx(id: string, mermaidImages: Record<string, string>) {
   // Page break after the revision table so the first content section
   // ("ที่มาและความสำคัญ") always starts at the top of a fresh page.
   templateData.revisionTable =
-    styleContentTables(await renderSimpleOoxml(revisionHtml)) +
+    renderRevisionTable(project.revisionHistory) +
     `<w:p><w:r><w:br w:type="page"/></w:r></w:p>`;
   for (const key of SECTION_KEYS) {
     templateData[`body${key}`] = htmlByKey.has(key)

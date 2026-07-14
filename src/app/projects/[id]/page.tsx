@@ -133,6 +133,7 @@ export default async function ProjectPage({ params }: { params: { id: string } }
           status: project.status,
           startDate: project.startDate ? project.startDate.toISOString().slice(0, 10) : "",
           endDate: project.endDate ? project.endDate.toISOString().slice(0, 10) : "",
+          revisionHistory: project.revisionHistory,
         }}
         perms={perms}
         businessTypeNames={businessTypes.map((b) => b.name)}

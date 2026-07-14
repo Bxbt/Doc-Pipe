@@ -67,6 +67,7 @@ type Props = {
     status: string;
     startDate: string;
     endDate: string;
+    revisionHistory: string; // JSON string of RevisionRow[]
   };
   perms: { canEdit: boolean; canAdmin: boolean };
   businessTypeNames: string[];
@@ -541,6 +542,20 @@ function Checklist({ missing }: Props) {
   );
 }
 
+type RevisionRow = { editor: string; date: string; detail: string; version: string; approver: string };
+
+const EMPTY_REVISION: RevisionRow = { editor: "", date: "", detail: "", version: "", approver: "" };
+
+function parseRevisions(json: string): RevisionRow[] {
+  try {
+    const arr = JSON.parse(json);
+    if (!Array.isArray(arr)) return [];
+    return arr.map((r) => ({ ...EMPTY_REVISION, ...r }));
+  } catch {
+    return [];
+  }
+}
+
 function Settings({ projectId, project, perms, businessTypeNames }: Props) {
   const router = useRouter();
   const [form, setForm] = useState({
@@ -553,8 +568,22 @@ function Settings({ projectId, project, perms, businessTypeNames }: Props) {
     startDate: project.startDate,
     endDate: project.endDate,
   });
+  const [rows, setRows] = useState<RevisionRow[]>(() => parseRevisions(project.revisionHistory));
   const [isPending, startTransition] = useTransition();
   const [saved, setSaved] = useState(false);
+
+  const setRow = (i: number, patch: Partial<RevisionRow>) =>
+    setRows((rs) => rs.map((r, j) => (j === i ? { ...r, ...patch } : r)));
+  const addRow = () => setRows((rs) => [...rs, { ...EMPTY_REVISION }]);
+  const removeRow = (i: number) => setRows((rs) => rs.filter((_, j) => j !== i));
+  const moveRow = (i: number, dir: -1 | 1) =>
+    setRows((rs) => {
+      const j = i + dir;
+      if (j < 0 || j >= rs.length) return rs;
+      const next = [...rs];
+      [next[i], next[j]] = [next[j], next[i]];
+      return next;
+    });
 
   if (!perms.canEdit) {
     return (
@@ -566,7 +595,7 @@ function Settings({ projectId, project, perms, businessTypeNames }: Props) {
 
   function save() {
     startTransition(async () => {
-      await updateProject(projectId, form);
+      await updateProject(projectId, { ...form, revisionHistory: JSON.stringify(rows) });
       setSaved(true);
       router.refresh();
       setTimeout(() => setSaved(false), 2000);
@@ -623,6 +652,55 @@ function Settings({ projectId, project, perms, businessTypeNames }: Props) {
         <L label="Description">
           <textarea rows={3} value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} className={cn(inputCls, "resize-y")} />
         </L>
+
+        {/* Revision history — manually entered; renders as the fixed-format table
+            at the front of the Word (BOI) export. */}
+        <div className="space-y-2 border-t border-border pt-4">
+          <div className="flex items-center justify-between">
+            <span className="text-sm font-medium">ประวัติการแก้ไขเอกสาร</span>
+            <span className="text-xs text-muted">Word export front table</span>
+          </div>
+          {rows.length === 0 && (
+            <p className="text-xs text-muted">ยังไม่มีรายการ — กด “เพิ่มแถว” เพื่อกรอกประวัติการแก้ไข</p>
+          )}
+          {rows.map((r, i) => (
+            <div key={i} className="space-y-2 rounded-lg border border-border p-3">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-semibold text-muted">ลำดับ {i + 1}</span>
+                <div className="flex items-center gap-1">
+                  <button type="button" onClick={() => moveRow(i, -1)} disabled={i === 0}
+                    className="rounded px-1.5 text-muted hover:text-fg disabled:opacity-30" title="เลื่อนขึ้น">↑</button>
+                  <button type="button" onClick={() => moveRow(i, 1)} disabled={i === rows.length - 1}
+                    className="rounded px-1.5 text-muted hover:text-fg disabled:opacity-30" title="เลื่อนลง">↓</button>
+                  <button type="button" onClick={() => removeRow(i)}
+                    className="rounded px-1 text-muted hover:text-red-400" title="ลบแถว"><Trash2 size={14} /></button>
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                <L label="ชื่อผู้แก้ไข">
+                  <input value={r.editor} onChange={(e) => setRow(i, { editor: e.target.value })} className={inputCls} />
+                </L>
+                <L label="วันที่">
+                  <DatePicker value={r.date} onChange={(v) => setRow(i, { date: v })} />
+                </L>
+                <L label="เวอร์ชั่น">
+                  <input value={r.version} onChange={(e) => setRow(i, { version: e.target.value })} className={inputCls} />
+                </L>
+                <L label="ผู้อนุมัติ">
+                  <input value={r.approver} onChange={(e) => setRow(i, { approver: e.target.value })} className={inputCls} />
+                </L>
+              </div>
+              <L label="รายละเอียด">
+                <textarea rows={2} value={r.detail} onChange={(e) => setRow(i, { detail: e.target.value })} className={cn(inputCls, "resize-y")} />
+              </L>
+            </div>
+          ))}
+          <button type="button" onClick={addRow}
+            className="w-full rounded-lg border border-dashed border-border py-2 text-sm text-muted hover:border-brand hover:text-brand">
+            + เพิ่มแถว
+          </button>
+        </div>
+
         <button
           onClick={save}
           disabled={isPending}

@@ -62,6 +62,9 @@ model Project {
   businessType String  @default("Generic")
   status      String   @default("Active") // Active | OnHold | Done | Archived
   description String?
+  // Manually-entered document revision history for the Word export's front table.
+  // JSON string: {editor,date,detail,version,approver}[] (date = "YYYY-MM-DD").
+  revisionHistory String @default("[]")
   startDate   DateTime?
   endDate     DateTime?
   createdAt   DateTime @default(now())
