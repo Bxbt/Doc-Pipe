@@ -4,7 +4,8 @@ import { linkDocuments, unlinkDocuments } from "@/lib/mcp";
 export const dynamic = "force-dynamic";
 
 // Add a dependency edge (targetId depends on sourceId).
-export async function POST(req: Request, { params }: { params: { id: string } }) {
+export async function POST(req: Request, props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   const user = await authFromRequest(req);
   if (!user) return unauthorized();
   const body = await req.json().catch(() => ({}));
@@ -19,7 +20,8 @@ export async function POST(req: Request, { params }: { params: { id: string } })
 }
 
 // Remove a dependency edge.
-export async function DELETE(req: Request, { params }: { params: { id: string } }) {
+export async function DELETE(req: Request, props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   const user = await authFromRequest(req);
   if (!user) return unauthorized();
   const body = await req.json().catch(() => ({}));

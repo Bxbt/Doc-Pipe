@@ -318,10 +318,8 @@ async function handleMessage(user: CurrentUser, msg: JsonRpc) {
   }
 }
 
-export async function POST(
-  req: Request,
-  { params }: { params: { token: string } }
-) {
+export async function POST(req: Request, props: { params: Promise<{ token: string }> }) {
+  const params = await props.params;
   const user = await userFromToken(params.token);
   if (!user) {
     return Response.json(rpcError(null, -32001, "Invalid access token"), {

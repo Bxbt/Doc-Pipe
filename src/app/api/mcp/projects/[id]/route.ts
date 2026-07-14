@@ -3,7 +3,8 @@ import { getProject, updateProject } from "@/lib/mcp";
 
 export const dynamic = "force-dynamic";
 
-export async function GET(req: Request, { params }: { params: { id: string } }) {
+export async function GET(req: Request, props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   const user = await authFromRequest(req);
   if (!user) return unauthorized();
   const project = await getProject(params.id);
@@ -11,7 +12,8 @@ export async function GET(req: Request, { params }: { params: { id: string } }) 
   return Response.json(project);
 }
 
-export async function PATCH(req: Request, { params }: { params: { id: string } }) {
+export async function PATCH(req: Request, props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   const user = await authFromRequest(req);
   if (!user) return unauthorized();
   const body = await req.json().catch(() => ({}));

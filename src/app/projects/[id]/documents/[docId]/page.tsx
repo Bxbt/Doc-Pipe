@@ -11,11 +11,12 @@ import { getDocumentThreads, getDocumentVersions } from "@/lib/queries";
 
 export const dynamic = "force-dynamic";
 
-export default async function DocumentPage({
-  params,
-}: {
-  params: { id: string; docId: string };
-}) {
+export default async function DocumentPage(
+  props: {
+    params: Promise<{ id: string; docId: string }>;
+  }
+) {
+  const params = await props.params;
   const [user, doc, project, docTypeOptions] = await Promise.all([
     getCurrentUser(),
     prisma.document.findUnique({

@@ -93,7 +93,8 @@ async function moveSectPrToEnd(buffer: Buffer): Promise<Buffer> {
   return zip.generateAsync({ type: "nodebuffer" });
 }
 
-export async function GET(req: Request, { params }: { params: { id: string } }) {
+export async function GET(req: Request, props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   // Access is gated by Cloudflare Access in prod; this also ensures a valid user.
   await getCurrentUser();
 

@@ -22,7 +22,8 @@ const TRACE_COLUMNS: { type: string; label: string }[] = [
   { type: "UAT", label: "UAT" },
 ];
 
-export default async function ProjectPage({ params }: { params: { id: string } }) {
+export default async function ProjectPage(props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   const [data, user, businessTypes, docTypeOptions] = await Promise.all([
     getProjectFull(params.id),
     getCurrentUser(),

@@ -9,7 +9,8 @@ export const dynamic = "force-dynamic";
 // Every distinct mermaid chart across the project's documents, deduped by hash.
 // The browser renders each to a PNG and posts them back to the docx-boi export,
 // which is the only way a diagram (not raw code) reaches the Word file.
-export async function GET(_req: Request, { params }: { params: { id: string } }) {
+export async function GET(_req: Request, props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   await getCurrentUser();
 
   const data = await getProjectFull(params.id);

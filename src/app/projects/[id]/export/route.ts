@@ -42,7 +42,8 @@ function statusPill(status: string, outdated: boolean): string {
   return `<span class="pill" style="color:${color};border-color:${color}">${esc(label)}</span>`;
 }
 
-export async function GET(req: Request, { params }: { params: { id: string } }) {
+export async function GET(req: Request, props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   // Access is gated by Cloudflare Access in production; this also ensures a
   // valid app user locally.
   await getCurrentUser();

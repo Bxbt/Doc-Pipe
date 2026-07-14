@@ -622,12 +622,14 @@ const statusText = (s: string, outdated: boolean) =>
 // GET keeps the plain-link behaviour (mermaid stays as code — no browser to
 // render it). POST carries the browser-rendered diagram PNGs keyed by chart
 // hash, which is what turns mermaid into real diagrams in the output.
-export async function GET(_req: Request, { params }: { params: { id: string } }) {
+export async function GET(_req: Request, props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   await getCurrentUser();
   return buildBoiDocx(params.id, {});
 }
 
-export async function POST(req: Request, { params }: { params: { id: string } }) {
+export async function POST(req: Request, props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   await getCurrentUser();
   let images: Record<string, string> = {};
   try {

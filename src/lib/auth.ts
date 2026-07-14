@@ -28,8 +28,8 @@ function nameFromEmail(email: string): string {
 // Resolve the authenticated email:
 //  - production: Cloudflare Access sets `Cf-Access-Authenticated-User-Email`
 //  - local dev:  fall back to DEV_EMAIL from the environment
-function resolveEmail(): string {
-  const h = headers();
+async function resolveEmail(): Promise<string> {
+  const h = await headers();
   const cfEmail = h.get("cf-access-authenticated-user-email");
   if (cfEmail) return cfEmail.toLowerCase();
   return (process.env.DEV_EMAIL ?? "dev@localhost").toLowerCase();
@@ -38,7 +38,7 @@ function resolveEmail(): string {
 // Returns the current user, creating a record on first sign-in.
 // Bootstrap admins (ADMIN_EMAILS) are always elevated to Admin.
 export async function getCurrentUser(): Promise<CurrentUser> {
-  const email = resolveEmail();
+  const email = await resolveEmail();
   const isBootstrapAdmin = adminEmails().includes(email);
 
   let user = await prisma.user.findUnique({ where: { email } });

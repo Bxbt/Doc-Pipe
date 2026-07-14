@@ -3,7 +3,8 @@ import { prisma } from "@/lib/db";
 import { getCurrentUser } from "@/lib/auth";
 import { storedPath, isInline } from "@/lib/storage";
 
-export async function GET(_req: Request, { params }: { params: { id: string } }) {
+export async function GET(_req: Request, props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   // Access is gated by Cloudflare Access in production; this also ensures a
   // valid app user locally.
   await getCurrentUser();
