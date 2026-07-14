@@ -1,5 +1,6 @@
 import { prisma } from "./db";
 import { canEdit, type CurrentUser } from "./auth";
+import { visibleProjectWhere, canViewProject } from "./access";
 import { upstreamOf, downstreamOf, type Edge } from "./graph";
 import { docLabel, LOCK_TTL_MS } from "./constants";
 import { bumpMinor } from "./versioning";
@@ -17,8 +18,9 @@ async function edgesFor(projectId: string): Promise<Edge[]> {
   return deps.map((d) => ({ sourceId: d.sourceId, targetId: d.targetId }));
 }
 
-export async function listProjects() {
+export async function listProjects(user: CurrentUser) {
   const projects = await prisma.project.findMany({
+    where: visibleProjectWhere(user),
     orderBy: { createdAt: "desc" },
     select: {
       id: true,
@@ -37,7 +39,8 @@ export async function listProjects() {
   }));
 }
 
-export async function getProject(projectId: string) {
+export async function getProject(user: CurrentUser, projectId: string) {
+  if (!(await canViewProject(user, projectId))) return null;
   const project = await prisma.project.findUnique({
     where: { id: projectId },
     include: { documents: { orderBy: { order: "asc" } } },
@@ -62,9 +65,11 @@ export async function getProject(projectId: string) {
 
 // A single rich read for grounding: the document plus the concatenated content
 // of everything upstream of it, plus the authoring spec for its type.
-export async function getDocument(documentId: string) {
+export async function getDocument(user: CurrentUser, documentId: string) {
   const doc = await prisma.document.findUnique({ where: { id: documentId } });
   if (!doc) return null;
+  // Gate by the parent project's visibility (also protects the upstream context).
+  if (!(await canViewProject(user, doc.projectId))) return null;
 
   const edges = await edgesFor(doc.projectId);
   const upstreamIds = [...upstreamOf(documentId, edges)];
@@ -112,6 +117,7 @@ export async function createDocument(
   content: string
 ) {
   if (!canEdit(user)) throw new Error("Editor access required to create documents.");
+  if (!(await canViewProject(user, projectId))) throw new Error("Project not found.");
   const project = await prisma.project.findUnique({ where: { id: projectId }, select: { id: true } });
   if (!project) throw new Error("Project not found.");
 
@@ -148,6 +154,7 @@ export async function updateDocument(user: CurrentUser, documentId: string, cont
   if (!canEdit(user)) throw new Error("Editor access required to write documents.");
   const doc = await prisma.document.findUnique({ where: { id: documentId } });
   if (!doc) throw new Error("Document not found.");
+  if (!(await canViewProject(user, doc.projectId))) throw new Error("Document not found.");
 
   const holder = lockedByOther(doc, user.id);
   if (holder) throw new Error(`Document is being edited by ${holder}; try again later.`);
@@ -258,7 +265,7 @@ export async function createProject(
       businessType: input.businessType,
       description: input.description?.trim() || null,
       status: "Active",
-      members: { create: { userId: user.id } },
+      members: { create: { userId: user.id, role: "owner" } },
     },
   });
   await prisma.activity.create({
@@ -286,6 +293,7 @@ export async function linkDocuments(
   targetId: string
 ) {
   if (!canEdit(user)) throw new Error("Editor access required to link documents.");
+  if (!(await canViewProject(user, projectId))) throw new Error("Project not found.");
   if (sourceId === targetId) throw new Error("A document cannot depend on itself.");
 
   const docs = await prisma.document.findMany({
@@ -327,6 +335,7 @@ export async function unlinkDocuments(
   targetId: string
 ) {
   if (!canEdit(user)) throw new Error("Editor access required to unlink documents.");
+  if (!(await canViewProject(user, projectId))) throw new Error("Project not found.");
   const [src, tgt] = await Promise.all([
     prisma.document.findUnique({ where: { id: sourceId }, select: { type: true } }),
     prisma.document.findUnique({ where: { id: targetId }, select: { type: true } }),
@@ -357,6 +366,7 @@ export async function reorderPipeline(
   orderedDocumentIds: string[]
 ) {
   if (!canEdit(user)) throw new Error("Editor access required to reorder the pipeline.");
+  if (!(await canViewProject(user, projectId))) throw new Error("Project not found.");
 
   const docs = await prisma.document.findMany({
     where: { projectId },
@@ -398,6 +408,7 @@ export async function updateProject(
   }
 ) {
   if (!canEdit(user)) throw new Error("Editor access required to edit a project.");
+  if (!(await canViewProject(user, projectId))) throw new Error("Project not found.");
   const project = await prisma.project.findUnique({ where: { id: projectId }, select: { id: true } });
   if (!project) throw new Error("Project not found.");
 

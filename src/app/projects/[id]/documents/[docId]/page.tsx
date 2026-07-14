@@ -17,8 +17,8 @@ export default async function DocumentPage(
   }
 ) {
   const params = await props.params;
-  const [user, doc, project, docTypeOptions] = await Promise.all([
-    getCurrentUser(),
+  const user = await getCurrentUser();
+  const [doc, project, docTypeOptions] = await Promise.all([
     prisma.document.findUnique({
       where: { id: params.docId },
       include: {
@@ -31,6 +31,7 @@ export default async function DocumentPage(
       include: {
         documents: { select: { id: true, type: true, title: true, status: true, outdated: true, order: true } },
         dependencies: true,
+        members: { where: { userId: user.id }, select: { id: true } },
       },
     }),
     getDocTypeOptions(),
@@ -47,6 +48,8 @@ export default async function DocumentPage(
     docTypeOptions.find((o) => o.type === t)?.label ?? docLabel(t);
 
   if (!doc || !project || doc.projectId !== project.id) notFound();
+  // Visibility gate: private project's documents are hidden from non-members.
+  if (project.visibility === "private" && project.members.length === 0 && !canAdmin(user)) notFound();
 
   // Edit-lock state for the initial render (the lock itself is enforced
   // server-side in acquireEditLock; this is just the hint shown on load).

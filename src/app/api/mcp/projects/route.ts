@@ -6,7 +6,7 @@ export const dynamic = "force-dynamic";
 export async function GET(req: Request) {
   const user = await authFromRequest(req);
   if (!user) return unauthorized();
-  return Response.json({ projects: await listProjects() });
+  return Response.json({ projects: await listProjects(user) });
 }
 
 export async function POST(req: Request) {

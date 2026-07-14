@@ -38,6 +38,8 @@ go out of date. No more drifting docs.
 | **Document Library** | Editable catalogue of reusable documents (create / edit / delete) edited with the same block editor; new project documents draw starter content from it, and Business Type pickers list from it. Names in any language (e.g. Thai) carry through to the project as the document's title |
 | **Custom inputs** | App-wide styled dropdowns (with a built-in search filter on long lists) and a calendar date picker (portal-based, theme-aware) |
 | **Edit lock** | One person edits a document at a time; others see a "being edited" modal and can't enter. Stale locks (no heartbeat for 90s) auto-release so a closed tab never deadlocks; admins can force-unlock |
+| **Project sharing** | Each project is **Public** (every signed-in user) or **Private** (only added members + Admins). Owner/Admin flips visibility and adds people via the **Share** button in the project header. Gating is enforced on every read path — dashboard, lists, project/document pages, search, attachments, and MCP token tools — so a private project can't leak. Roles still govern CRUD (Viewer = read-only) |
+| **Role management** | Admins set other users' roles on the **Team** page. Guardrails: an Admin can't demote themselves, and bootstrap Admins (in `ADMIN_EMAILS`) can't be changed |
 | **AI drafting (MCP)** | Connect your **own** Claude/ChatGPT to read & draft documents via [MCP](#-ai-drafting-via-mcp) — a hosted remote connector (paste a URL) or a local bridge. Doc-Pipe never holds an AI key; AI writes land as **Draft / In Review** for a human to approve |
 | **Access tokens** | Per-user personal access tokens (`dp_…`, SHA-256 hashed, role-scoped, revocable) in the user menu → *Access tokens*, used to authenticate MCP clients |
 | **Profile** | Edit your display name from the user menu → *Profile* |
@@ -218,8 +220,10 @@ Doc-Pipe exposes its documents to **your own** Claude or ChatGPT through the
 side (your subscription); Doc-Pipe never holds an AI key. Every request is
 authenticated by a **personal access token** you create in the app
 (user menu → **Access tokens**), so it carries your role — a Viewer's token can
-only read. AI writes always land as **Draft / In Review** for a human to
-approve, respect the edit lock, and never auto-flag downstream documents.
+only read. A token also sees **only the projects you can** (public + your private
+memberships), so it can't read or write a private project you're not a member of.
+AI writes always land as **Draft / In Review** for a human to approve, respect the
+edit lock, and never auto-flag downstream documents.
 
 The AI is grounded before it writes: `get_document` returns the target plus the
 full content of everything **upstream** of it, plus a per-type authoring spec
