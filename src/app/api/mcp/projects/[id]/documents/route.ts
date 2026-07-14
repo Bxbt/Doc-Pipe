@@ -4,7 +4,8 @@ import { createDocument } from "@/lib/mcp";
 export const dynamic = "force-dynamic";
 
 // Create a new document (AI draft) in this project.
-export async function POST(req: Request, { params }: { params: { id: string } }) {
+export async function POST(req: Request, props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   const user = await authFromRequest(req);
   if (!user) return unauthorized();
 

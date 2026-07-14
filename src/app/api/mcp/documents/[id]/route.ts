@@ -3,7 +3,8 @@ import { getDocument, updateDocument } from "@/lib/mcp";
 
 export const dynamic = "force-dynamic";
 
-export async function GET(req: Request, { params }: { params: { id: string } }) {
+export async function GET(req: Request, props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   const user = await authFromRequest(req);
   if (!user) return unauthorized();
   const doc = await getDocument(params.id);
@@ -12,7 +13,8 @@ export async function GET(req: Request, { params }: { params: { id: string } }) 
 }
 
 // Replace a document's content with an AI draft (lands as In Review).
-export async function POST(req: Request, { params }: { params: { id: string } }) {
+export async function POST(req: Request, props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   const user = await authFromRequest(req);
   if (!user) return unauthorized();
 

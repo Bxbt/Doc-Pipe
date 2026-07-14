@@ -10,7 +10,8 @@ import {
   ALLOWED_MIME,
 } from "@/lib/storage";
 
-export async function POST(req: Request, { params }: { params: { docId: string } }) {
+export async function POST(req: Request, props: { params: Promise<{ docId: string }> }) {
+  const params = await props.params;
   const user = await getCurrentUser();
   if (!canEdit(user)) {
     return NextResponse.json({ error: "Editor access required." }, { status: 403 });

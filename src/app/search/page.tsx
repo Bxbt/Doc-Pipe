@@ -7,11 +7,12 @@ import { docLabel } from "@/lib/constants";
 
 export const dynamic = "force-dynamic";
 
-export default async function SearchPage({
-  searchParams,
-}: {
-  searchParams: { q?: string };
-}) {
+export default async function SearchPage(
+  props: {
+    searchParams: Promise<{ q?: string }>;
+  }
+) {
+  const searchParams = await props.searchParams;
   const q = (searchParams.q ?? "").trim();
 
   // No query (e.g. the search box was cleared) — there's nothing to show, so

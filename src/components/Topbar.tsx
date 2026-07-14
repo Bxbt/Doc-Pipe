@@ -18,7 +18,7 @@ export function Topbar({
   const pathname = usePathname();
   const [menuOpen, setMenuOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
-  const searchTimer = useRef<ReturnType<typeof setTimeout>>();
+  const searchTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
   // Navigate to the search results for a query. While already on /search we
   // replace (no history spam per keystroke); otherwise push once. Clearing the

@@ -27,7 +27,7 @@ function Popover({
 }: {
   open: boolean;
   onClose: () => void;
-  anchorRef: React.RefObject<HTMLElement>;
+  anchorRef: React.RefObject<HTMLElement | null>;
   children: ReactNode;
   width?: "anchor" | "auto";
 }) {
