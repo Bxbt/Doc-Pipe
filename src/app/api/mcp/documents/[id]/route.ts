@@ -7,7 +7,7 @@ export async function GET(req: Request, props: { params: Promise<{ id: string }>
   const params = await props.params;
   const user = await authFromRequest(req);
   if (!user) return unauthorized();
-  const doc = await getDocument(params.id);
+  const doc = await getDocument(user, params.id);
   if (!doc) return Response.json({ error: "Document not found" }, { status: 404 });
   return Response.json(doc);
 }

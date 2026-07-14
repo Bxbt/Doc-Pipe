@@ -8,6 +8,7 @@ import {
   Activity as ActivityIcon,
 } from "lucide-react";
 import { getDashboardData, overallCompletion } from "@/lib/queries";
+import { getCurrentUser } from "@/lib/auth";
 import { Card, StatCard, ProgressBar, PageHeader } from "@/components/ui";
 import { StatusBadge } from "@/components/badges";
 import { ActivityFeed } from "@/components/ActivityFeed";
@@ -17,7 +18,8 @@ import { timeAgo } from "@/lib/utils";
 export const dynamic = "force-dynamic";
 
 export default async function DashboardPage() {
-  const data = await getDashboardData();
+  const user = await getCurrentUser();
+  const data = await getDashboardData(user);
 
   return (
     <div>

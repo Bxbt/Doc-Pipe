@@ -1,6 +1,8 @@
 import { prisma } from "./db";
 import { DOC_TYPES, SMART_CHECKLIST, isComplete, type DocType } from "./constants";
 import type { Edge } from "./graph";
+import { canAdmin, type CurrentUser } from "./auth";
+import { visibleProjectWhere } from "./access";
 
 // Phase grouping used by the Project Health panel.
 export const HEALTH_PHASES: { label: string; types: DocType[] }[] = [
@@ -48,22 +50,37 @@ export function missingDocs(businessType: string, docs: { type: string }[]) {
   }));
 }
 
-export async function getDashboardData() {
+export async function getDashboardData(user: CurrentUser) {
+  // Only count/show data from projects this user may see (Admins see all).
+  const projWhere = visibleProjectWhere(user);
+  const docWhere = { project: projWhere };
+  const activityWhere = canAdmin(user)
+    ? {}
+    : {
+        OR: [
+          { projectId: null },
+          { project: { visibility: "public" } },
+          { project: { members: { some: { userId: user.id } } } },
+        ],
+      };
   const [projects, totalDocs, outdatedDocs, inReviewDocs, recentDocs, activities] =
     await Promise.all([
       prisma.project.findMany({
+        where: projWhere,
         include: { documents: { select: { type: true, status: true, updatedAt: true } } },
         orderBy: { updatedAt: "desc" },
       }),
-      prisma.document.count(),
-      prisma.document.count({ where: { outdated: true } }),
-      prisma.document.count({ where: { status: "InReview" } }),
+      prisma.document.count({ where: docWhere }),
+      prisma.document.count({ where: { ...docWhere, outdated: true } }),
+      prisma.document.count({ where: { ...docWhere, status: "InReview" } }),
       prisma.document.findMany({
+        where: docWhere,
         orderBy: { updatedAt: "desc" },
         take: 6,
         include: { project: { select: { id: true, name: true } } },
       }),
       prisma.activity.findMany({
+        where: activityWhere,
         orderBy: { createdAt: "desc" },
         take: 50,
         include: { user: { select: { name: true } }, project: { select: { name: true } } },

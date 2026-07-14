@@ -204,14 +204,14 @@ async function callTool(
 ): Promise<unknown> {
   switch (name) {
     case "list_projects":
-      return listProjects();
+      return listProjects(user);
     case "get_project": {
-      const p = await getProject(args.projectId);
+      const p = await getProject(user, args.projectId);
       if (!p) throw new Error("Project not found.");
       return p;
     }
     case "get_document": {
-      const d = await getDocument(args.documentId);
+      const d = await getDocument(user, args.documentId);
       if (!d) throw new Error("Document not found.");
       return d;
     }

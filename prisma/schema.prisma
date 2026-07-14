@@ -61,6 +61,9 @@ model Project {
   // Drives the Smart Checklist of recommended documents.
   businessType String  @default("Generic")
   status      String   @default("Active") // Active | OnHold | Done | Archived
+  // Who can SEE the project. "public" = every authenticated user; "private" =
+  // only members (ProjectMember) + Admins. CRUD is still gated by global role.
+  visibility  String   @default("public") // public | private
   description String?
   // Manually-entered document revision history for the Word export's front table.
   // JSON string: {editor,date,detail,version,approver}[] (date = "YYYY-MM-DD").
@@ -80,6 +83,8 @@ model ProjectMember {
   id        String  @id @default(cuid())
   projectId String
   userId    String
+  // "owner" (the creator; may share/toggle visibility) or "member" (granted access).
+  role      String  @default("member")
   project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
   user      User    @relation(fields: [userId], references: [id], onDelete: Cascade)
 

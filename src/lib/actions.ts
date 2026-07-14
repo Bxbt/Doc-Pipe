@@ -2,7 +2,8 @@
 
 import { revalidatePath } from "next/cache";
 import { prisma } from "./db";
-import { getCurrentUser, canEdit, canReview, canAdmin } from "./auth";
+import { getCurrentUser, canEdit, canReview, canAdmin, isBootstrapAdmin } from "./auth";
+import { canManageProject } from "./access";
 import { downstreamOf, type Edge } from "./graph";
 import { docLabel } from "./constants";
 import { slugType } from "./doc-types";
@@ -300,7 +301,7 @@ export async function createProject(input: {
       status: "Active",
       startDate: toDate(input.startDate),
       endDate: toDate(input.endDate),
-      members: { create: { userId: user.id } },
+      members: { create: { userId: user.id, role: "owner" } },
     },
   });
   await prisma.activity.create({
@@ -312,9 +313,69 @@ export async function createProject(input: {
   return project.id;
 }
 
+// ── Project sharing (visibility + members) ─ owner or Admin only ────────────
+
+async function assertCanManage(projectId: string) {
+  const user = await getCurrentUser();
+  if (!(await canManageProject(user, projectId)))
+    throw new Error("Only the project owner or an Admin can manage sharing.");
+  return user;
+}
+
+export async function setProjectVisibility(projectId: string, visibility: "public" | "private") {
+  const user = await assertCanManage(projectId);
+  await prisma.project.update({ where: { id: projectId }, data: { visibility } });
+  await prisma.activity.create({
+    data: { projectId, userId: user.id, action: "updated_project", detail: `visibility → ${visibility}` },
+  });
+  revalidatePath(`/projects/${projectId}`);
+  revalidatePath("/projects");
+  revalidatePath("/");
+}
+
+export async function addProjectMember(projectId: string, userId: string) {
+  await assertCanManage(projectId);
+  // Idempotent — the (projectId, userId) unique constraint prevents duplicates.
+  await prisma.projectMember.upsert({
+    where: { projectId_userId: { projectId, userId } },
+    create: { projectId, userId, role: "member" },
+    update: {},
+  });
+  revalidatePath(`/projects/${projectId}`);
+}
+
+export async function removeProjectMember(projectId: string, userId: string) {
+  await assertCanManage(projectId);
+  // Never remove an owner (would orphan the project's management).
+  const m = await prisma.projectMember.findUnique({
+    where: { projectId_userId: { projectId, userId } },
+    select: { role: true },
+  });
+  if (m?.role === "owner") throw new Error("Cannot remove the project owner.");
+  await prisma.projectMember.deleteMany({ where: { projectId, userId } });
+  revalidatePath(`/projects/${projectId}`);
+}
+
+// Directory of users to pick from when sharing (everyone who has signed in).
+export async function listUsersForSharing() {
+  await getCurrentUser();
+  return prisma.user.findMany({
+    orderBy: { name: "asc" },
+    select: { id: true, name: true, email: true },
+  });
+}
+
 export async function setUserRole(userId: string, role: string) {
   const user = await getCurrentUser();
-  if (user.role !== "Admin") throw new Error("Only Admins can change roles.");
+  if (!canAdmin(user)) throw new Error("Only Admins can change roles.");
+  // An Admin can change anyone else's role (including other Admins), but:
+  //  - not their own (no self-demote),
+  //  - not a bootstrap Admin from ADMIN_EMAILS (they'd just be re-elevated).
+  if (userId === user.id) throw new Error("You can't change your own role.");
+  const target = await prisma.user.findUnique({ where: { id: userId }, select: { email: true } });
+  if (!target) throw new Error("User not found.");
+  if (isBootstrapAdmin(target.email))
+    throw new Error("This account is a bootstrap admin (ADMIN_EMAILS) and can't be changed.");
   await prisma.user.update({ where: { id: userId }, data: { role } });
   revalidatePath("/team");
 }

@@ -16,6 +16,12 @@ function adminEmails(): string[] {
     .filter(Boolean);
 }
 
+// A bootstrap admin (listed in ADMIN_EMAILS) is always elevated to Admin on
+// login and must not be demotable — getCurrentUser would just re-elevate them.
+export function isBootstrapAdmin(email: string): boolean {
+  return adminEmails().includes(email.toLowerCase());
+}
+
 function nameFromEmail(email: string): string {
   const local = email.split("@")[0] ?? email;
   return local

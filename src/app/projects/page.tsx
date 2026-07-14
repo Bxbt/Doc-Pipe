@@ -1,14 +1,18 @@
 import Link from "next/link";
 import { prisma } from "@/lib/db";
 import { overallCompletion } from "@/lib/queries";
+import { getCurrentUser } from "@/lib/auth";
+import { visibleProjectWhere } from "@/lib/access";
 import { Card, ProgressBar, PageHeader, Button } from "@/components/ui";
 import { formatDate } from "@/lib/utils";
-import { Plus } from "lucide-react";
+import { Plus, Lock } from "lucide-react";
 
 export const dynamic = "force-dynamic";
 
 export default async function ProjectsPage() {
+  const user = await getCurrentUser();
   const projects = await prisma.project.findMany({
+    where: visibleProjectWhere(user),
     include: { documents: { select: { status: true, updatedAt: true } } },
     orderBy: { updatedAt: "desc" },
   });
@@ -38,6 +42,9 @@ export default async function ProjectsPage() {
               <Card className="flex h-full flex-col gap-3 transition-colors hover:border-brand/50">
                 <div className="flex items-start justify-between gap-2">
                   <h3 className="font-medium leading-snug">{p.name}</h3>
+                  {p.visibility === "private" && (
+                    <Lock size={13} className="mt-0.5 shrink-0 text-muted" aria-label="Private" />
+                  )}
                 </div>
                 <p className="line-clamp-2 text-xs text-muted">{p.description ?? "—"}</p>
                 <div className="mt-auto space-y-2 pt-2">

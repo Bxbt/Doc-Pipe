@@ -1,6 +1,8 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { prisma } from "@/lib/db";
+import { getCurrentUser } from "@/lib/auth";
+import { visibleProjectWhere } from "@/lib/access";
 import { PageHeader, Card, EmptyState } from "@/components/ui";
 import { StatusBadge } from "@/components/badges";
 import { docLabel } from "@/lib/constants";
@@ -19,22 +21,34 @@ export default async function SearchPage(
   // go back to the dashboard rather than a "type a query" dead end.
   if (!q) redirect("/");
 
+  const user = await getCurrentUser();
+  const visWhere = visibleProjectWhere(user);
   const [projects, documents] = await Promise.all([
     prisma.project.findMany({
       where: {
-        OR: [
-          { name: { contains: q, mode: "insensitive" } },
-          { description: { contains: q, mode: "insensitive" } },
-          { customer: { contains: q, mode: "insensitive" } },
+        AND: [
+          {
+            OR: [
+              { name: { contains: q, mode: "insensitive" as const } },
+              { description: { contains: q, mode: "insensitive" as const } },
+              { customer: { contains: q, mode: "insensitive" as const } },
+            ],
+          },
+          visWhere,
         ],
       },
       take: 10,
     }),
     prisma.document.findMany({
       where: {
-        OR: [
-          { title: { contains: q, mode: "insensitive" } },
-          { content: { contains: q, mode: "insensitive" } },
+        AND: [
+          {
+            OR: [
+              { title: { contains: q, mode: "insensitive" as const } },
+              { content: { contains: q, mode: "insensitive" as const } },
+            ],
+          },
+          { project: visWhere },
         ],
       },
       include: { project: { select: { id: true, name: true } } },

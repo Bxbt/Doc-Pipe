@@ -5,6 +5,7 @@ import { getProjectFull, computeHealth, overallCompletion, missingDocs } from "@
 import { downstreamOf } from "@/lib/graph";
 import { ProjectWorkspace } from "@/components/ProjectWorkspace";
 import { WordBoiExport } from "@/components/WordBoiExport";
+import { ShareControl } from "@/components/ShareControl";
 import { formatDate } from "@/lib/utils";
 import { getCurrentUser, canEdit, canAdmin } from "@/lib/auth";
 import { getBusinessTypes } from "@/lib/business-types";
@@ -32,6 +33,10 @@ export default async function ProjectPage(props: { params: Promise<{ id: string 
   ]);
   if (!data) notFound();
   const { project, edges, unresolvedByDoc } = data;
+  // Visibility gate: a private project is hidden from non-members (Admins see all).
+  const isMember = project.members.some((m) => m.userId === user.id);
+  if (project.visibility === "private" && !isMember && !canAdmin(user)) notFound();
+  const canManage = canAdmin(user) || project.members.some((m) => m.userId === user.id && m.role === "owner");
   const docs = project.documents;
   const perms = { canEdit: canEdit(user), canAdmin: canAdmin(user) };
 
@@ -109,6 +114,17 @@ export default async function ProjectPage(props: { params: Promise<{ id: string 
         </div>
         <div className="flex flex-col items-end gap-3">
         <div className="flex items-center gap-2">
+          <ShareControl
+            projectId={project.id}
+            visibility={project.visibility}
+            canManage={canManage}
+            members={project.members.map((m) => ({
+              userId: m.userId,
+              name: m.user.name,
+              email: m.user.email,
+              role: m.role,
+            }))}
+          />
           <a
             href={`/projects/${project.id}/export`}
             target="_blank"

@@ -1,5 +1,5 @@
 import { prisma } from "@/lib/db";
-import { getCurrentUser } from "@/lib/auth";
+import { getCurrentUser, isBootstrapAdmin } from "@/lib/auth";
 import { PageHeader, Card } from "@/components/ui";
 import { RoleBadge } from "@/components/badges";
 import { RoleSelect } from "@/components/RoleSelect";
@@ -58,7 +58,11 @@ export default async function TeamPage() {
                 </td>
                 <td className="px-4 py-3 text-muted">{u.email}</td>
                 <td className="px-4 py-3">
-                  {isAdmin ? <RoleSelect userId={u.id} role={u.role} /> : <RoleBadge role={u.role} />}
+                  {isAdmin && u.id !== me.id && !isBootstrapAdmin(u.email) ? (
+                    <RoleSelect userId={u.id} role={u.role} />
+                  ) : (
+                    <RoleBadge role={u.role} />
+                  )}
                 </td>
               </tr>
             ))}
