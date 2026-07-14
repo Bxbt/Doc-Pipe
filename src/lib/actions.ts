@@ -344,6 +344,7 @@ export async function updateProject(
     status?: string;
     startDate?: string;
     endDate?: string;
+    revisionHistory?: string; // JSON string of revision rows
   }
 ) {
   const user = await getCurrentUser();
@@ -360,6 +361,7 @@ export async function updateProject(
       ...(input.status !== undefined ? { status: input.status } : {}),
       ...(input.startDate !== undefined ? { startDate: toDate(input.startDate) } : {}),
       ...(input.endDate !== undefined ? { endDate: toDate(input.endDate) } : {}),
+      ...(input.revisionHistory !== undefined ? { revisionHistory: input.revisionHistory } : {}),
     },
   });
   await prisma.activity.create({
