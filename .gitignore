@@ -26,3 +26,6 @@ prisma/uploads/
 
 # Generated Prisma source client for one-shot SQLite->PG migration
 src/generated/
+
+# Office temp/lock files
+~$*
