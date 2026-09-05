@@ -3,6 +3,7 @@ services:
     build: .
     image: doc-pipeline:latest
     container_name: doc-pipeline
+    mem_limit: 512m
     restart: unless-stopped
     environment:
       # Postgres over the internal Docker network. DIRECT_URL is used by
@@ -34,6 +35,7 @@ services:
   postgres:
     image: postgres:16-alpine
     container_name: doc-pipeline-db
+    mem_limit: 512m
     restart: unless-stopped
     environment:
       - POSTGRES_USER=docpipe
@@ -51,10 +53,11 @@ services:
 
   # Cloudflare Tunnel — exposes the app at your domain with no open ports.
   # Create a tunnel in Cloudflare Zero Trust, point a public hostname
-  # (your public hostname) to http://app:3000, and paste the token below.
+  # (your public hostname) to http://doc-pipeline:3000, and paste the token below.
   cloudflared:
     image: cloudflare/cloudflared:latest
     container_name: doc-pipeline-tunnel
+    mem_limit: 128m
     restart: unless-stopped
     command: tunnel --no-autoupdate run
     environment:
